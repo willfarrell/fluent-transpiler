@@ -1,0 +1,46 @@
+{
+  "name": "fluent-transpiler",
+  "version": "0.0.0",
+  "description": "Transpile Fluent (ftl) files into optomized, tree-shakable, JavaScript EcmaScript Modules (esm).",
+  "main": "index.js",
+  "type": "module",
+  "bin": {
+    "ftl": "cli.js"
+  },
+  "scripts": {
+    "test": "npm run test:cli && npm run test:unit",
+    "test:cli": "./cli.js --locale en-CA --locale en --use-isolating --variable-notation camelCase test/files/index.ftl --output test/files/index.mjs",
+    "test:unit": "c8 node --test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/willfarrell/fluent-transpiler.git"
+  },
+  "keywords": [
+    "Fluent",
+    "@fluent",
+    "ftl",
+    "localization",
+    "l10n",
+    "internationalization",
+    "i18n",
+    "ast",
+    "compiler",
+    "transpiler"
+  ],
+  "author": "willfarrell",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/willfarrell/fluent-transpiler/issues"
+  },
+  "homepage": "https://middy.js.org",
+  "dependencies": {
+    "@fluent/syntax": "0.18.1",
+    "change-case": "4.1.2",
+    "commander": "9.4.0"
+  },
+  "devDependencies": {
+    "@fluent/bundle": "^0.17.1",
+    "c8": "^7.12.0"
+  }
+}
