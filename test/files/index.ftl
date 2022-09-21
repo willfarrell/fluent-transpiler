@@ -15,6 +15,10 @@ replaceTerm = term: { -term }.
     }
 parameterized-terms = Informacje o { -brand-name(case: "locative") }.
 
+
+-term-with-var = {$number}
+termWithVariable = {-term-with-var}
+
 ### Message References
 messageValue = message: { replaceTerm }
 messageNestedParamValue = message: { replaceParam }
@@ -104,6 +108,8 @@ selectorNumberOrdinal =
   [toomany] There are {$number} (toomany).
    *[other] There are { $number } (other).
 }
+
+subSelector = {selectorNumberOrdinal}
 
 ## Attributes
 loginInput = Predefined value

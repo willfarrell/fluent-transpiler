@@ -33,7 +33,9 @@ const brandName = (params) => `${__select(
     },
     `Firefox`
   )}`
-export const parameterizedTerms = `Informacje o ${brandName({"case":"locative"})}.`
+export const parameterizedTerms = (params) => `Informacje o ${brandName({ ...params, "case":"locative" })}.`
+const termWithVar = (params) => `${params?.number}`
+export const termWithVariable = (params) => `${termWithVar(params)}`
 // ### Message References
 export const messageValue = `message: ${replaceTerm}`
 export const messageNestedParamValue = (params) => `message: ${replaceParam(params)}`
@@ -96,6 +98,7 @@ export const selectorNumberOrdinal = (params) => `${__select(
     },
     `There are ${__formatVariable(params?.number)} (other).`
   )}`
+export const subSelector = (params) => `${selectorNumberOrdinal(params)}`
 // ## Attributes
 export const loginInput = {
   value: `Predefined value`,
@@ -112,7 +115,7 @@ ${".attr = Value"} on a new line.`,
     attr: `An actual attribute (not part of the text value above)`
   }
 }
-const __exports = {text, replaceParam, replaceTerm, 'parameterized-terms':parameterizedTerms, messageValue, messageNestedParamValue, openingBrace, closingBrace, blankIsRemoved, blankIsPreserved, leadingBracket, literalQuote, literalEscapedQuote, privacyLabel, dash, dashUnicode, emoji, emojiUnicode, singleLine, multiLine, block, leadingBlankSpaces, leadingBlankLines, blankLines, multiLineIndent, timeElapsed, todayIs, selectorNumberCardinal, selectorNumberOrdinal, loginInput, attributeHowTo}
+const __exports = {text, replaceParam, replaceTerm, 'parameterized-terms':parameterizedTerms, termWithVariable, messageValue, messageNestedParamValue, openingBrace, closingBrace, blankIsRemoved, blankIsPreserved, leadingBracket, literalQuote, literalEscapedQuote, privacyLabel, dash, dashUnicode, emoji, emojiUnicode, singleLine, multiLine, block, leadingBlankSpaces, leadingBlankLines, blankLines, multiLineIndent, timeElapsed, todayIs, selectorNumberCardinal, selectorNumberOrdinal, subSelector, loginInput, attributeHowTo}
 
 export default (id, params) => {
 	const source = __exports[id] ?? __exports['_'+id]

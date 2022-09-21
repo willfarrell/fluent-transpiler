@@ -82,7 +82,7 @@ export const compile = (src, opts) => {
 		Term: (data) => {
 			const  assignment = compileAssignment(data.id)
 			const templateStringLiteral = compileType(data.value)
-			metadata[variable].term = true
+			metadata[assignment].term = true
 			if (metadata[assignment].params) {
 				return `const ${assignment} = (${options.params}) => ${templateStringLiteral}\n`
 			}
@@ -185,14 +185,25 @@ export const compile = (src, opts) => {
 		},
 		TermReference: (data) => {
 			const termName = compileType(data.id)
-			const {named} = compileFunctionArguments(data)
+			metadata[variable].params ||= metadata[termName].params
+			
+			let params
+			if (metadata[termName].params) {
+				let {named} = compileFunctionArguments(data)
+				named = JSON.stringify(named)
+				if (named) {
+					params = `{ ...${options.params}, ${named.substring(1, named.length-1)} }`
+				} else {
+					params = options.params
+				}
+			}
 			if (!options.disableMinify) {
 				if (metadata[termName].params) {
-					return `${termName}(${JSON.stringify(named)})`
+					return `${termName}(${params})`
 				}
 				return `${termName}`
 			}
-			return `${termName}(${named ? JSON.stringify(named) : ''})`
+			return `${termName}(${params ? params : ''})`
 		},
 		NamedArgument:(data) => {
 			// Inconsistent: `NamedArgument` uses `name` instead of `id` for Identifier
@@ -245,7 +256,6 @@ export const compile = (src, opts) => {
 	}
 	
 	const {body} = parse(src)
-	
 	let translations = ``
 	for(const data of body) {
 		translations += compileType(data)
