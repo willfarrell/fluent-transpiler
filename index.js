@@ -10,18 +10,24 @@ const exportDefault = `(id, params) => {
 `
 export const compile = (src, opts) => {
 	const options = {
-		variableNotation: 'camelCase',
-		disableMinify: false, // TODO needs better name
-		params: 'params',
 		comments: true,
 		errorOnJunk: true,
+		includeMessages: [],
+		excludeMessages: [],
+		//treeShaking: false,
+		variableNotation: 'camelCase',
+		disableMinify: false, // TODO needs better name strictInterface?
 		useIsolating: false,
+		params: 'params',
 		exportDefault,
 		...opts,
 	}
 	if (!Array.isArray(options.locale)) options.locale = [options.locale]
+	if (!Array.isArray(options.includeMessages)) options.includeMessages = [options.includeMessages]
+	if (!Array.isArray(options.excludeMessages)) options.excludeMessages = [options.excludeMessages]
 	
 	const metadata = {}
+	const exports = []
 	const functions = {} // global functions
 	let variable
 	
@@ -90,6 +96,15 @@ export const compile = (src, opts) => {
 		},
 		Message: (data) => {
 			const assignment = compileAssignment(data.id)
+			
+			if (options.includeMessages.length && !options.includeMessages.includes(assignment)) {
+				return ''
+			}
+			
+			if (options.excludeMessages.length && options.excludeMessages.includes(assignment)) {
+				return ''
+			}
+			
 			const templateStringLiteral = data.value && compileType(data.value, data.type)
 			metadata[assignment].attributes = data.attributes.length
 			let attributes = {}
@@ -100,29 +115,47 @@ export const compile = (src, opts) => {
 					}).join(',\n')}\n  }`
 			}
 			//
+			let message = ''
+			
 			if (!options.disableMinify) {
 				if (metadata[variable].attributes) {
 					if (metadata[assignment].params) {
-						return `export const ${assignment} = (${options.params}) => ({
+						message = `(${options.params}) => ({
   value:${templateStringLiteral},
   attributes:${attributes}
 })\n`
 					}
-					return `export const ${assignment} = {
+					message = `{
   value: ${templateStringLiteral},
   attributes: ${attributes}
 }\n`
+				} else if (metadata[assignment].params) {
+					message = `(${options.params}) => ${templateStringLiteral}\n`
+				} else {
+					message = `${templateStringLiteral}\n`
 				}
-				if (metadata[assignment].params) {
-					return `export const ${assignment} = (${options.params}) => ${templateStringLiteral}\n`
-				}
-				return `export const ${assignment} = ${templateStringLiteral}\n`
-			}
+			} else {
 			// consistent API
-			return `export const ${variable} = (${metadata[assignment].params ? options.params : ''}) => ({
+			  message = `(${metadata[assignment].params ? options.params : ''}) => ({
   value:${templateStringLiteral},
   attributes:${attributes}
 })\n`
+			}
+			//if (options.treeShaking) {
+				if (assignment === metadata[assignment].id) {
+					exports.push(`${assignment}`)
+				} else {
+					exports.push(`'${metadata[assignment].id}': ${assignment}`)
+				}
+				return `export const ${assignment} = ${message}`
+			/*} else {
+				if (assignment === metadata[assignment].id) {
+					exports.push(`${assignment}: ${message}`)
+				} else {
+					exports.push(`'${metadata[assignment].id}': ${message}`)
+				}
+			}*/
+			return ''
 		},
 		Comment: (data) => {
 			if (options.comments) return `// # ${data.content}\n`
@@ -300,14 +333,7 @@ const __select = (value, cases, fallback, options) => {
 `
 	}
 	output += `\n`+translations
-	output += `const __exports = {${Object.keys(metadata)
-			.filter(key => !metadata[key].term)
-			.map(key => {
-				if (key === metadata[key].id) return key
-				return `'${metadata[key].id}':${key}`
-			})
-			.join(', ')
-		}}\n`
+	output += `const __exports = {\n  ${exports.join(',\n  ')}\n}`
 	output += `\nexport default ${options.exportDefault}`
 	
 	return output

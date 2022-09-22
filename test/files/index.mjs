@@ -115,8 +115,41 @@ ${".attr = Value"} on a new line.`,
     attr: `An actual attribute (not part of the text value above)`
   }
 }
-const __exports = {text, replaceParam, replaceTerm, 'parameterized-terms':parameterizedTerms, termWithVariable, messageValue, messageNestedParamValue, openingBrace, closingBrace, blankIsRemoved, blankIsPreserved, leadingBracket, literalQuote, literalEscapedQuote, privacyLabel, dash, dashUnicode, emoji, emojiUnicode, singleLine, multiLine, block, leadingBlankSpaces, leadingBlankLines, blankLines, multiLineIndent, timeElapsed, todayIs, selectorNumberCardinal, selectorNumberOrdinal, subSelector, loginInput, attributeHowTo}
-
+const __exports = {
+  text,
+  replaceParam,
+  replaceTerm,
+  'parameterized-terms': parameterizedTerms,
+  termWithVariable,
+  messageValue,
+  messageNestedParamValue,
+  openingBrace,
+  closingBrace,
+  blankIsRemoved,
+  blankIsPreserved,
+  leadingBracket,
+  literalQuote,
+  literalEscapedQuote,
+  privacyLabel,
+  dash,
+  dashUnicode,
+  emoji,
+  emojiUnicode,
+  singleLine,
+  multiLine,
+  block,
+  leadingBlankSpaces,
+  leadingBlankLines,
+  blankLines,
+  multiLineIndent,
+  timeElapsed,
+  todayIs,
+  selectorNumberCardinal,
+  selectorNumberOrdinal,
+  subSelector,
+  loginInput,
+  attributeHowTo
+}
 export default (id, params) => {
 	const source = __exports[id] ?? __exports['_'+id]
 	if (typeof source === 'undefined') return '*** '+id+' ***'

@@ -7,6 +7,10 @@
   "bin": {
     "ftl": "cli.js"
   },
+  "files":[
+    "cli.js",
+    "index.js"
+  ],
   "scripts": {
     "test": "npm run test:cli && npm run test:unit",
     "test:cli": "./cli.js --locale en-CA --locale en --use-isolating --variable-notation camelCase test/files/index.ftl --output test/files/index.mjs",
