@@ -115,7 +115,7 @@ subSelector = {selectorNumberOrdinal}
 loginInput = Predefined value
   .placeholder = email@example.com
   .ariaLabel = Login input value
-  .title = Type your login email
+  .title = Type your { $string }
 
 attributeHowTo =
     To add an attribute to this messages, write

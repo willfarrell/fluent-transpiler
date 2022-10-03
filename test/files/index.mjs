@@ -100,14 +100,14 @@ export const selectorNumberOrdinal = (params) => `${__select(
   )}`
 export const subSelector = (params) => `${selectorNumberOrdinal(params)}`
 // ## Attributes
-export const loginInput = {
-  value: `Predefined value`,
-  attributes: {
+export const loginInput = (params) => ({
+  value:`Predefined value`,
+  attributes:{
     placeholder: `email@example.com`,
     ariaLabel: `Login input value`,
-    title: `Type your login email`
+    title: `Type your ${__formatVariable(params?.string)}`
   }
-}
+})
 export const attributeHowTo = {
   value: `To add an attribute to this messages, write
 ${".attr = Value"} on a new line.`,

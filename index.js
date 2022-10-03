@@ -116,19 +116,19 @@ export const compile = (src, opts) => {
 			}
 			//
 			let message = ''
-			
 			if (!options.disableMinify) {
-				if (metadata[variable].attributes) {
+				if (metadata[assignment].attributes) {
 					if (metadata[assignment].params) {
 						message = `(${options.params}) => ({
   value:${templateStringLiteral},
   attributes:${attributes}
 })\n`
-					}
-					message = `{
+					} else {
+					    message = `{
   value: ${templateStringLiteral},
   attributes: ${attributes}
 }\n`
+					}
 				} else if (metadata[assignment].params) {
 					message = `(${options.params}) => ${templateStringLiteral}\n`
 				} else {
@@ -346,6 +346,5 @@ const variableNotation = {
 	snakeCase, 
 	constantCase
 }
-// for `export defaults`
 
 export default compile

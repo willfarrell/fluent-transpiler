@@ -1,6 +1,6 @@
 {
   "name": "fluent-transpiler",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Transpile Fluent (ftl) files into optimized, tree-shakable, JavaScript EcmaScript Modules (esm).",
   "main": "index.js",
   "type": "module",
@@ -37,7 +37,7 @@
   "bugs": {
     "url": "https://github.com/willfarrell/fluent-transpiler/issues"
   },
-  "homepage": "https://middy.js.org",
+  "homepage": "https://github.com/willfarrell/fluent-transpiler",
   "dependencies": {
     "@fluent/syntax": "0.18.1",
     "change-case": "4.1.2",
