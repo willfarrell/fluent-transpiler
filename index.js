@@ -360,46 +360,44 @@ const formatTime = (value) => {
 */
   if (functions.__formatRelativeTime) {
     output += `
-  const __relativeTimeDiff = (d) => {
-	const msPerMinute = 60 * 1000
-	const msPerHour = msPerMinute * 60
-	const msPerDay = msPerHour * 24
-	const msPerWeek = msPerDay * 7
-	const msPerMonth = msPerDay * 30
-	const msPerYear = msPerDay * 365.25
-	const elapsed = d - new Date()
-  
-	if (Math.abs(elapsed) < msPerMinute) {
-	  return [Math.round(elapsed / 1000), 'second']
-	}
-	if (Math.abs(elapsed) < msPerHour) {
-	  return [Math.round(elapsed / msPerMinute), 'minute']
-	}
-	if (Math.abs(elapsed) < msPerDay) {
-	  return [Math.round(elapsed / msPerHour), 'hour']
-	}
-	if (Math.abs(elapsed) < msPerWeek * 2) {
-	  return [Math.round(elapsed / msPerDay), 'day']
-	}
-	if (Math.abs(elapsed) < msPerMonth) {
-	  return [Math.round(elapsed / msPerWeek), 'week']
-	}
-	if (Math.abs(elapsed) < msPerYear) {
-	  return [Math.round(elapsed / msPerMonth), 'month']
-	}
-	return [Math.round(elapsed / msPerYear), 'year']
+const __relativeTimeDiff = (d) => {
+  const msPerMinute = 60 * 1000
+  const msPerHour = msPerMinute * 60
+  const msPerDay = msPerHour * 24
+  const msPerWeek = msPerDay * 7
+  const msPerMonth = msPerDay * 30
+  const msPerYear = msPerDay * 365.25
+  const elapsed = d - new Date()
+	
+  if (Math.abs(elapsed) < msPerMinute) {
+    return [Math.round(elapsed / 1000), 'second']
   }
-  const __formatRelativeTime = (value, options) => {
-	  if (typeof value === 'string') value = new Date(value)
-	  if (isNaN(value.getTime())) return value
-	  try {
-		const [duration, unit] = relativeTimeDiff(value)
-		return relativeTimeFormat.format(duration, unit)
-	  } catch (e) {
-		return dateTimeFormat.format(value)
-	  }
-	  return new Intl.DateTimeFormat(__locales, options).format(value)
+  if (Math.abs(elapsed) < msPerHour) {
+  	return [Math.round(elapsed / msPerMinute), 'minute']
   }
+  if (Math.abs(elapsed) < msPerDay) {
+  	return [Math.round(elapsed / msPerHour), 'hour']
+  }
+  if (Math.abs(elapsed) < msPerWeek * 2) {
+  	return [Math.round(elapsed / msPerDay), 'day']
+  }
+  if (Math.abs(elapsed) < msPerMonth) {
+  	return [Math.round(elapsed / msPerWeek), 'week']
+  }
+  if (Math.abs(elapsed) < msPerYear) {
+  	return [Math.round(elapsed / msPerMonth), 'month']
+  }
+  return [Math.round(elapsed / msPerYear), 'year']
+}
+const __formatRelativeTime = (value, options) => {
+  if (typeof value === 'string') value = new Date(value)
+  if (isNaN(value.getTime())) return value
+  try {
+	const [duration, unit] = __relativeTimeDiff(value)
+	return new Intl.RelativeTimeFormat(__locales, options).format(duration, unit)
+  } catch (e) {}
+  return new Intl.DateTimeFormat(__locales, options).format(value)
+}
   `
   }
   if (functions.__formatDateTime) {
