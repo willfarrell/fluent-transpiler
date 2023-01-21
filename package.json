@@ -1,13 +1,13 @@
 {
   "name": "fluent-transpiler",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "Transpile Fluent (ftl) files into optimized, tree-shakable, JavaScript EcmaScript Modules (esm).",
   "main": "index.js",
   "type": "module",
   "bin": {
     "ftl": "cli.js"
   },
-  "files":[
+  "files": [
     "cli.js",
     "index.js"
   ],
