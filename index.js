@@ -68,8 +68,15 @@ export const compile = (src, opts) => {
   }
 
   const types = {
-    Identifier: (data) => {
-      const value = variableNotation[options.variableNotation](data.name)
+    Identifier: (data, parent) => {
+      const value =
+        parent === 'Attribute'
+          ? data.name
+          : variableNotation[options.variableNotation](data.name)
+
+      if (value.includes('-')) {
+        return `'${value}'`
+      }
       // Check for reserved words - TODO add in rest
       if (['const', 'default', 'enum', 'if'].includes(value)) {
         return '_' + value
@@ -77,7 +84,7 @@ export const compile = (src, opts) => {
       return value
     },
     Attribute: (data) => {
-      const key = compileType(data.id)
+      const key = compileType(data.id, data.type)
       const value = compileType(data.value, data.type)
       return `  ${key}: ${value}`
     },

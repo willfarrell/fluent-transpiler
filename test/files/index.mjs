@@ -1,6 +1,8 @@
 const __locales = "en-CA"
 
 const __formatDateTime = (value, options) => {
+	if (typeof value === 'string') value = new Date(value)
+	if (isNaN(value.getTime())) return value
 	return new Intl.DateTimeFormat(__locales, options).format(value)
 }
 
@@ -103,9 +105,10 @@ export const subSelector = (params) => `${selectorNumberOrdinal(params)}`
 export const loginInput = (params) => ({
   value:`Predefined value`,
   attributes:{
-    placeholder: `email@example.com`,
+    place_holder: `email@example.com`,
     ariaLabel: `Login input value`,
-    title: `Type your ${__formatVariable(params?.string)}`
+    title: `Type your ${__formatVariable(params?.string)}`,
+    'title-alt': `Title alt`
   }
 })
 export const attributeHowTo = {

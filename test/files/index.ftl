@@ -113,9 +113,10 @@ subSelector = {selectorNumberOrdinal}
 
 ## Attributes
 loginInput = Predefined value
-  .placeholder = email@example.com
+  .place_holder = email@example.com
   .ariaLabel = Login input value
   .title = Type your { $string }
+  .title-alt = Title alt
 
 attributeHowTo =
     To add an attribute to this messages, write
