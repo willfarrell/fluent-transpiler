@@ -1,6 +1,9 @@
 # https://projectfluent.org/fluent/guide/
 # Writing Text
 text = text: hard coded.
+textSingleQuote = quote: 'hard' coded.
+textDoubleQuote = quote: "hard" coded.
+textSideQuote = quote: `hard` coded.
 
 ## Placeables
 replaceParam = param: { $string } | { $integer } | {$decimal} | {$number} .

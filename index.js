@@ -202,7 +202,7 @@ export const compile = (src, opts) => {
     },
     // Element
     TextElement: (data) => {
-      return data.value
+      return data.value.replaceAll('`', '\\`') // escape string literal
     },
     Placeable: (data, parent) => {
       return `${options.useIsolating ? '\u2068' : ''}\${${compileType(
