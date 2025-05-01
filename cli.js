@@ -26,19 +26,19 @@ new Command()
   )
   .addOption(
     new Option(
-      '--include <includeMessages...>',
+      '--include-key <includeMessageKey...>',
       'Allowed messages to be included. Default to include all.'
     )
   )
   .addOption(
     new Option(
-      '--exclude <excludeMessages...>',
+      '--exclude-key <excludeMessageKey...>',
       'Ignored messages to be excluded. Default to exclude none.'
     )
   )
   .addOption(
     new Option(
-      '--exclude-value <excludeMessageValue...>',
+      '--exclude-value <excludeMessageValue>',
       'Set message to an empty string when it contains this value. Default to not allowing empty strings.'
     )
   )

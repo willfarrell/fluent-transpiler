@@ -2,19 +2,19 @@ import { parse } from '@fluent/syntax'
 import { camelCase, pascalCase, constantCase, snakeCase } from 'change-case'
 
 const exportDefault = `(id, params) => {
-	const source = __exports[id] ?? __exports['_'+id]
-	if (typeof source === 'undefined') return '*** '+id+' ***'
-	if (typeof source === 'function') return source(params)
-	return source
+  const source = __exports[id] ?? __exports['_'+id]
+  if (typeof source === 'undefined') return '*** '+id+' ***'
+  if (typeof source === 'function') return source(params)
+  return source
 }
 `
 export const compile = (src, opts) => {
   const options = {
     comments: true,
     errorOnJunk: true,
-    includeMessages: [],
-    excludeMessages: [],
-    excludeMessageValue: undefined,
+    includeKey: [],
+    excludeKey: [],
+    excludeValue: undefined,
     //treeShaking: false,
     variableNotation: 'camelCase',
     disableMinify: false, // TODO needs better name strictInterface?
@@ -24,14 +24,15 @@ export const compile = (src, opts) => {
     ...opts
   }
   if (!Array.isArray(options.locale)) options.locale = [options.locale]
-  if (!Array.isArray(options.includeMessages))
-    options.includeMessages = [options.includeMessages]
-  if (!Array.isArray(options.excludeMessages))
-    options.excludeMessages = [options.excludeMessages]
-  if (options.excludeMessageValue) {
+  if (!Array.isArray(options.includeKey))
+    options.includeKey = [options.includeKey]
+  if (!Array.isArray(options.excludeKey))
+    options.excludeKey = [options.excludeKey]
+  if (options.excludeValue) {
     // cast to template literal
-    options.excludeMessageValue = '`' + options.excludeMessageValue + '`'
+    options.excludeValue = '`' + options.excludeValue + '`'
   }
+  console.log({ options })
 
   const metadata = {}
   const exports = []
@@ -118,15 +119,15 @@ export const compile = (src, opts) => {
       const assignment = compileAssignment(data.id)
 
       if (
-        options.includeMessages.length &&
-        !options.includeMessages.includes(assignment)
+        options.includeKey.length &&
+        !options.includeKey.includes(assignment)
       ) {
         return ''
       }
 
       if (
-        options.excludeMessages.length &&
-        options.excludeMessages.includes(assignment)
+        options.excludeKey.length &&
+        options.excludeKey.includes(assignment)
       ) {
         return ''
       }
@@ -134,7 +135,7 @@ export const compile = (src, opts) => {
       const templateStringLiteral =
         data.value && compileType(data.value, data.type)
 
-      if (options.excludeMessageValue === templateStringLiteral) {
+      if (options.excludeValue === templateStringLiteral) {
         templateStringLiteral = '``'
       }
 
@@ -183,12 +184,12 @@ export const compile = (src, opts) => {
       }
       return `export const ${assignment} = ${message}`
       /*} else {
-				if (assignment === metadata[assignment].id) {
-					exports.push(`${assignment}: ${message}`)
-				} else {
-					exports.push(`'${metadata[assignment].id}': ${message}`)
-				}
-			}*/
+        if (assignment === metadata[assignment].id) {
+          exports.push(`${assignment}: ${message}`)
+        } else {
+          exports.push(`'${metadata[assignment].id}': ${message}`)
+        }
+      }*/
       return ''
     },
     Comment: (data) => {
@@ -369,10 +370,10 @@ const formatTime = (value) => {
   value = new Date(value)
   if (isNaN(value.getTime())) return value
   try {
-	const [duration, unit] = relativeTimeDiff(value)
-	return relativeTimeFormat.format(duration, unit)
+  const [duration, unit] = relativeTimeDiff(value)
+  return relativeTimeFormat.format(duration, unit)
   } catch (e) {
-	return dateTimeFormat.format(value)
+  return dateTimeFormat.format(value)
   }
 }
 */
@@ -386,24 +387,24 @@ const __relativeTimeDiff = (d) => {
   const msPerMonth = msPerDay * 30
   const msPerYear = msPerDay * 365.25
   const elapsed = d - new Date()
-	
+
   if (Math.abs(elapsed) < msPerMinute) {
     return [Math.round(elapsed / 1000), 'second']
   }
   if (Math.abs(elapsed) < msPerHour) {
-  	return [Math.round(elapsed / msPerMinute), 'minute']
+    return [Math.round(elapsed / msPerMinute), 'minute']
   }
   if (Math.abs(elapsed) < msPerDay) {
-  	return [Math.round(elapsed / msPerHour), 'hour']
+    return [Math.round(elapsed / msPerHour), 'hour']
   }
   if (Math.abs(elapsed) < msPerWeek * 2) {
-  	return [Math.round(elapsed / msPerDay), 'day']
+    return [Math.round(elapsed / msPerDay), 'day']
   }
   if (Math.abs(elapsed) < msPerMonth) {
-  	return [Math.round(elapsed / msPerWeek), 'week']
+    return [Math.round(elapsed / msPerWeek), 'week']
   }
   if (Math.abs(elapsed) < msPerYear) {
-  	return [Math.round(elapsed / msPerMonth), 'month']
+    return [Math.round(elapsed / msPerMonth), 'month']
   }
   return [Math.round(elapsed / msPerYear), 'year']
 }
@@ -411,8 +412,8 @@ const __formatRelativeTime = (value, options) => {
   if (typeof value === 'string') value = new Date(value)
   if (isNaN(value.getTime())) return value
   try {
-	const [duration, unit] = __relativeTimeDiff(value)
-	return new Intl.RelativeTimeFormat(__locales, options).format(duration, unit)
+  const [duration, unit] = __relativeTimeDiff(value)
+  return new Intl.RelativeTimeFormat(__locales, options).format(duration, unit)
   } catch (e) {}
   return new Intl.DateTimeFormat(__locales, options).format(value)
 }
@@ -421,16 +422,16 @@ const __formatRelativeTime = (value, options) => {
   if (functions.__formatDateTime) {
     output += `
 const __formatDateTime = (value, options) => {
-	if (typeof value === 'string') value = new Date(value)
-	if (isNaN(value.getTime())) return value
-	return new Intl.DateTimeFormat(__locales, options).format(value)
+  if (typeof value === 'string') value = new Date(value)
+  if (isNaN(value.getTime())) return value
+  return new Intl.DateTimeFormat(__locales, options).format(value)
 }
 `
   }
   if (functions.__formatVariable || functions.__formatNumber) {
     output += `
 const __formatNumber = (value, options) => {
-	return new Intl.NumberFormat(__locales, options).format(value)
+  return new Intl.NumberFormat(__locales, options).format(value)
 }
 `
   }
@@ -447,9 +448,9 @@ const __formatVariable = (value) => {
   if (functions.__select) {
     output += `
 const __select = (value, cases, fallback, options) => {
-	const pluralRules = new Intl.PluralRules(__locales, options)
-	const rule = pluralRules.select(value)
-	return cases[value] ?? cases[rule] ?? fallback
+  const pluralRules = new Intl.PluralRules(__locales, options)
+  const rule = pluralRules.select(value)
+  return cases[value] ?? cases[rule] ?? fallback
 }
 `
   }
