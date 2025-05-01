@@ -14,6 +14,7 @@ export const compile = (src, opts) => {
     errorOnJunk: true,
     includeMessages: [],
     excludeMessages: [],
+    excludeMessageValue: undefined,
     //treeShaking: false,
     variableNotation: 'camelCase',
     disableMinify: false, // TODO needs better name strictInterface?
@@ -27,6 +28,10 @@ export const compile = (src, opts) => {
     options.includeMessages = [options.includeMessages]
   if (!Array.isArray(options.excludeMessages))
     options.excludeMessages = [options.excludeMessages]
+  if (options.excludeMessageValue) {
+    // cast to template literal
+    options.excludeMessageValue = '`' + options.excludeMessageValue + '`'
+  }
 
   const metadata = {}
   const exports = []
@@ -128,6 +133,11 @@ export const compile = (src, opts) => {
 
       const templateStringLiteral =
         data.value && compileType(data.value, data.type)
+
+      if (options.excludeMessageValue === templateStringLiteral) {
+        templateStringLiteral = '``'
+      }
+
       metadata[assignment].attributes = data.attributes.length
       let attributes = {}
       if (metadata[assignment].attributes) {
@@ -202,6 +212,7 @@ export const compile = (src, opts) => {
     },
     // Element
     TextElement: (data) => {
+      if (data.value === options.emptyString) return
       return data.value.replaceAll('`', '\\`') // escape string literal
     },
     Placeable: (data, parent) => {
