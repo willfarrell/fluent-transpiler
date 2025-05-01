@@ -32,7 +32,6 @@ export const compile = (src, opts) => {
     // cast to template literal
     options.excludeValue = '`' + options.excludeValue + '`'
   }
-  console.log({ options })
 
   const metadata = {}
   const exports = []
@@ -132,7 +131,7 @@ export const compile = (src, opts) => {
         return ''
       }
 
-      const templateStringLiteral =
+      let templateStringLiteral =
         data.value && compileType(data.value, data.type)
 
       if (options.excludeValue === templateStringLiteral) {
