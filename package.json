@@ -3,7 +3,7 @@
 		".github"
 	],
 	"name": "fluent-transpiler",
-	"version": "0.3.2",
+	"version": "0.4.0",
 	"description": "Transpile Fluent (ftl) files into optimized, tree-shakable, JavaScript EcmaScript Modules (esm).",
 	"main": "index.js",
 	"type": "module",
