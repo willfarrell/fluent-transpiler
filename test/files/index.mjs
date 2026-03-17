@@ -1,29 +1,35 @@
-const __locales = "en-CA"
+const __locales = ["en-CA"]
+const __intlCache = {}
 
 const __formatDateTime = (value, options) => {
-	if (typeof value === 'string') value = new Date(value)
-	if (isNaN(value.getTime())) return value
-	return new Intl.DateTimeFormat(__locales, options).format(value)
+  if (typeof value === 'string') value = new Date(value)
+  if (isNaN(value.getTime())) return value
+  const k = JSON.stringify(options) ?? ''
+  return (__intlCache['D'+k] ??= new Intl.DateTimeFormat(__locales, options)).format(value)
 }
 
 const __formatNumber = (value, options) => {
-	return new Intl.NumberFormat(__locales, options).format(value)
+  const k = JSON.stringify(options) ?? ''
+  return (__intlCache['N'+k] ??= new Intl.NumberFormat(__locales, options)).format(value)
 }
 
 const __formatVariable = (value) => {
   if (typeof value === 'string') return value
-  const decimal =  Number.parseFloat(value)
-  const number = Number.isInteger(decimal) ? Number.parseInt(value) : decimal
+  const decimal = Number.parseFloat(value)
+  const number = Number.isInteger(decimal) ? Number.parseInt(value, 10) : decimal
   return __formatNumber(number)
 }
 
 const __select = (value, cases, fallback, options) => {
-	const pluralRules = new Intl.PluralRules(__locales, options)
-	const rule = pluralRules.select(value)
-	return cases[value] ?? cases[rule] ?? fallback
+  const k = JSON.stringify(options) ?? ''
+  const rule = (__intlCache['P'+k] ??= new Intl.PluralRules(__locales, options)).select(value)
+  return cases[value] ?? cases[rule] ?? fallback
 }
 
 export const text = `text: hard coded.`
+export const textSingleQuote = `quote: 'hard' coded.`
+export const textDoubleQuote = `quote: "hard" coded.`
+export const textSideQuote = `quote: \`hard\` coded.`
 // ## Placeables
 export const replaceParam = (params) => `param: ${__formatVariable(params?.string)} | ${__formatVariable(params?.integer)} | ${__formatVariable(params?.decimal)} | ${__formatVariable(params?.number)} .`
 const term = `Firefox`
@@ -120,6 +126,9 @@ ${".attr = Value"} on a new line.`,
 }
 const __exports = {
   text,
+  textSingleQuote,
+  textDoubleQuote,
+  textSideQuote,
   replaceParam,
   replaceTerm,
   'parameterized-terms': parameterizedTerms,
@@ -154,8 +163,8 @@ const __exports = {
   attributeHowTo
 }
 export default (id, params) => {
-	const source = __exports[id] ?? __exports['_'+id]
-	if (typeof source === 'undefined') return '*** '+id+' ***'
-	if (typeof source === 'function') return source(params)
-	return source
+  const source = __exports[id] ?? __exports['_'+id]
+  if (typeof source === 'undefined') return '*** '+id+' ***'
+  if (typeof source === 'function') return source(params)
+  return source
 }
