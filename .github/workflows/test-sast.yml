@@ -105,7 +105,7 @@ jobs:
           npm ci --ignore-scripts --workspace .github
       - name: lockfile-lint
         run: |
-          npx lockfile-lint --path package-lock.json --type npm --allowed-schemes "https:" --validate-https --validate-integrity --validate-package-names
+          npx lockfile-lint --path package-lock.json --type npm --allowed-schemes "https:" --allowed-hosts npm --validate-integrity --validate-package-names
 
   # https://semgrep.dev/docs/semgrep-ci/sample-ci-configs/#github-actions
   semgrep:
