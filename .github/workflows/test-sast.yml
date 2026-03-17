@@ -90,7 +90,7 @@ jobs:
           category: "/language:${{ matrix.language }}"
 
   lockfile-lint:
-    name: "lockfile-lint"
+    name: "lockfile-lint: SAST package-lock.json"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
