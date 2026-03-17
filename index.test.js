@@ -45,9 +45,15 @@ const createBundleHelper = (locale, src) => {
 // === Integration: compile fixture matches reference ===
 
 test("Should produce output matching reference file", async () => {
-	const expected = await readFile("./test/files/index.mjs", { encoding: "utf8" });
+	const expected = await readFile("./test/files/index.mjs", {
+		encoding: "utf8",
+	});
 	const js = compile(ftl, { locale: "en-CA", useIsolating: false });
-	deepStrictEqual(js, expected, "Compiled output should match test/files/index.mjs");
+	deepStrictEqual(
+		js,
+		expected,
+		"Compiled output should match test/files/index.mjs",
+	);
 });
 
 // === Error handling ===
