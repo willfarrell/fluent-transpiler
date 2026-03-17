@@ -6,7 +6,15 @@
 	"version": "0.4.0",
 	"description": "Transpile Fluent (ftl) files into optimized, tree-shakable, JavaScript EcmaScript Modules (esm).",
 	"main": "index.js",
+	"types": "index.d.ts",
 	"type": "module",
+	"sideEffects": false,
+	"exports": {
+		".": {
+			"types": "./index.d.ts",
+			"default": "./index.js"
+		}
+	},
 	"engines": {
 		"node": ">=24"
 	},
@@ -16,7 +24,8 @@
 	},
 	"files": [
 		"cli.js",
-		"index.js"
+		"index.js",
+		"index.d.ts"
 	],
 	"scripts": {
 		"prepare": "husky",

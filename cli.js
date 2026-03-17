@@ -69,6 +69,7 @@ new Command()
 		),
 	)
 	.action(async (input, options) => {
+		options.comments = options.comments ?? false;
 		try {
 			await fileExists(input);
 

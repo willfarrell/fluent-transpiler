@@ -136,8 +136,7 @@ export const compile = (src, opts) => {
 		try {
 			return types[data.type](data, parent);
 		} catch (e) {
-			console.error("Error:", e.message, data, e.stack);
-			throw new Error(e.message, { cause: data, stack: e.stack });
+			throw new Error(e.message, { cause: { error: e, data } });
 		}
 	};
 
@@ -267,7 +266,6 @@ export const compile = (src, opts) => {
 			if (options.errorOnJunk) {
 				throw new Error("Junk found", { cause: data });
 			}
-			console.error("Error: Skipping Junk", JSON.stringify(data, null, 2));
 			return "";
 		},
 		// Element
@@ -396,9 +394,6 @@ export const compile = (src, opts) => {
 	};
 
 	if (/\t/.test(src)) {
-		console.error(
-			"Source file contains tab characters (\\t), replacing with <space>x4",
-		);
 		src = src.replace(/\t/g, "    ");
 	}
 
@@ -416,7 +411,7 @@ export const compile = (src, opts) => {
 		functions.__formatRelativeTime ||
 		functions.__select
 	) {
-		output += `const __locales = ${JSON.stringify(options.locale)}\n`;
+		output += `const __locales = ${JSON.stringify(options.locale)}\nconst __intlCache = {}\n`;
 	}
 	if (functions.__formatRelativeTime) {
 		output += `
@@ -453,26 +448,32 @@ const __formatRelativeTime = (value, options) => {
   if (typeof value === 'string') value = new Date(value)
   if (isNaN(value.getTime())) return value
   try {
-  const [duration, unit] = __relativeTimeDiff(value)
-  return new Intl.RelativeTimeFormat(__locales, options).format(duration, unit)
-  } catch (e) {}
-  return new Intl.DateTimeFormat(__locales, options).format(value)
+    const [duration, unit] = __relativeTimeDiff(value)
+    const k = JSON.stringify(options) ?? ''
+    return (__intlCache['R'+k] ??= new Intl.RelativeTimeFormat(__locales, options)).format(duration, unit)
+  } catch (e) {
+    // RelativeTimeFormat unsupported or invalid options, fall back to DateTimeFormat
+  }
+  const k = JSON.stringify(options) ?? ''
+  return (__intlCache['D'+k] ??= new Intl.DateTimeFormat(__locales, options)).format(value)
 }
-  `;
+`;
 	}
 	if (functions.__formatDateTime) {
 		output += `
 const __formatDateTime = (value, options) => {
   if (typeof value === 'string') value = new Date(value)
   if (isNaN(value.getTime())) return value
-  return new Intl.DateTimeFormat(__locales, options).format(value)
+  const k = JSON.stringify(options) ?? ''
+  return (__intlCache['D'+k] ??= new Intl.DateTimeFormat(__locales, options)).format(value)
 }
 `;
 	}
 	if (functions.__formatVariable || functions.__formatNumber) {
 		output += `
 const __formatNumber = (value, options) => {
-  return new Intl.NumberFormat(__locales, options).format(value)
+  const k = JSON.stringify(options) ?? ''
+  return (__intlCache['N'+k] ??= new Intl.NumberFormat(__locales, options)).format(value)
 }
 `;
 	}
@@ -480,7 +481,7 @@ const __formatNumber = (value, options) => {
 		output += `
 const __formatVariable = (value) => {
   if (typeof value === 'string') return value
-  const decimal =  Number.parseFloat(value)
+  const decimal = Number.parseFloat(value)
   const number = Number.isInteger(decimal) ? Number.parseInt(value, 10) : decimal
   return __formatNumber(number)
 }
@@ -489,8 +490,8 @@ const __formatVariable = (value) => {
 	if (functions.__select) {
 		output += `
 const __select = (value, cases, fallback, options) => {
-  const pluralRules = new Intl.PluralRules(__locales, options)
-  const rule = pluralRules.select(value)
+  const k = JSON.stringify(options) ?? ''
+  const rule = (__intlCache['P'+k] ??= new Intl.PluralRules(__locales, options)).select(value)
   return cases[value] ?? cases[rule] ?? fallback
 }
 `;
