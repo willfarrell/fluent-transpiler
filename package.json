@@ -36,7 +36,7 @@
 		"git:test-staged": "npm run git:unit-staged",
 		"lint": "biome check --write --no-errors-on-unmatched",
 		"test": "npm run test:lint && npm run test:unit && npm run test:types && npm run test:sast && npm run test:perf && npm run test:dast",
-		"test:lint": "biome check --no-errors-on-unmatched",
+		"test:lint": "biome ci --no-errors-on-unmatched",
 		"test:lint:staged": "biome check --staged --no-errors-on-unmatched",
 		"test:unit": "node --test --test-force-exit --experimental-test-coverage --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 ./**/*.test.js",
 		"test:types": "tstyche",
