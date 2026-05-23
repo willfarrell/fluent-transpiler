@@ -1,10 +1,10 @@
-import { deepStrictEqual, ok, throws } from "node:assert";
+import { deepStrictEqual, ok, rejects, strictEqual, throws } from "node:assert";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { FluentBundle, FluentResource } from "@fluent/bundle";
-import { compile } from "./index.js";
+import { compile, compileFiles } from "./index.js";
 
 // input
 const ftl = await readFile("./test/files/index.ftl", { encoding: "utf8" });
@@ -53,6 +53,69 @@ test("Should produce output matching reference file", async () => {
 		js,
 		expected,
 		"Compiled output should match test/files/index.mjs",
+	);
+});
+
+// === Multi-file joining ===
+
+test("Should join an array of sources into one module", () => {
+	const js = compile(["-brand = Firefox\n", "hello = Hi { -brand }\n"], {
+		locale: "en-CA",
+	});
+	ok(js.includes("const brand = `Firefox`"));
+	ok(js.includes("export const hello = `Hi ") && js.includes("brand}`"));
+});
+
+test("Should let later sources reference earlier sources", async () => {
+	const mod = await compileAndImport(
+		[
+			"-product = Firefox\ncommon-hello = Hello from common.\n",
+			"brand-tagline = Welcome to { -product }!\n",
+			"app-greeting = { brand-tagline } Hello, { $name }.\n",
+		],
+		{ locale: "en-CA", useIsolating: false },
+	);
+	strictEqual(
+		mod.default("app-greeting", { name: "world" }),
+		"Welcome to Firefox! Hello, world.",
+	);
+});
+
+test("Should throw on duplicate ids across joined sources", () => {
+	throws(
+		() =>
+			compile(["greeting = Hi from A.\n", "greeting = Hi from B.\n"], {
+				locale: "en-CA",
+			}),
+		{ message: /Duplicate id\(s\) found:[\s\S]*"greeting"/ },
+	);
+});
+
+test("Should compile multiple files with compileFiles", async () => {
+	const js = await compileFiles(
+		[
+			"./test/files/joined/common.ftl",
+			"./test/files/joined/brand.ftl",
+			"./test/files/joined/app.ftl",
+		],
+		{ locale: "en-CA", useIsolating: false },
+	);
+	ok(js.includes("export const appGreeting"));
+	ok(js.includes("export const brandTagline"));
+	ok(js.includes("export const commonHello"));
+});
+
+test("Should surface file paths in compileFiles duplicate errors", async () => {
+	await rejects(
+		() =>
+			compileFiles(
+				["./test/files/joined/dup-a.ftl", "./test/files/joined/dup-b.ftl"],
+				{ locale: "en-CA" },
+			),
+		{
+			message:
+				/Duplicate id\(s\) found:[\s\S]*"greeting"[\s\S]*dup-a\.ftl[\s\S]*dup-b\.ftl/,
+		},
 	);
 });
 

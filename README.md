@@ -35,12 +35,14 @@ npm i -D fluent-transpiler
 ## CLI
 
 ```bash
-Usage: ftl [options] <input>
+Usage: ftl [options] <inputs...>
 
 Compile Fluent (.ftl) files to JavaScript (.js or .mjs)
 
 Arguments:
-  input                                   Path to the Fluent file to compile
+  inputs                                  Paths to the Fluent file(s) to compile.
+                                          Multiple files are joined in order;
+                                          ids must be unique across the set.
 
 Options:
   --locale <locale...>                    What locale(s) to be used. Multiple can be set to allow for fallback. i.e. en-CA
@@ -78,4 +80,21 @@ import fluentTranspiler from 'fluent-transpiler'
 const ftl = await readFile('./path/to/en.ftl', { encoding: 'utf8' })
 const js = fluentTranspiler(ftl, { locale: 'en-CA' })
 await writeFile('./path/to/en.mjs', js, 'utf8')
+```
+
+### Joining multiple files
+
+`compile` also accepts an array of source strings, and `compileFiles` reads and
+joins files from disk. Sources are concatenated in the order supplied; top-level
+message and term ids must be unique across the set.
+
+```javascript
+import { writeFile } from 'node:fs/promises'
+import { compileFiles } from 'fluent-transpiler'
+
+const js = await compileFiles(
+  ['./common.ftl', './brand.ftl', './app.ftl'],
+  { locale: 'en-CA' },
+)
+await writeFile('./en.mjs', js, 'utf8')
 ```
