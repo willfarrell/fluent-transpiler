@@ -1,8 +1,41 @@
 // Copyright 2026 will Farrell, and fluent-transpiler contributors.
 // SPDX-License-Identifier: MIT
 
+import { readFile } from "node:fs/promises";
 import { parse } from "@fluent/syntax";
 import { camelCase, constantCase, pascalCase, snakeCase } from "change-case";
+
+const collectTopLevelIds = (src) => {
+	const { body } = parse(src);
+	const ids = [];
+	for (const node of body) {
+		if (node.type === "Message" || node.type === "Term") {
+			ids.push(node.id.name);
+		}
+	}
+	return ids;
+};
+
+const checkDuplicates = (sources) => {
+	const seen = new Map();
+	const duplicates = [];
+	for (const { label, src } of sources) {
+		for (const id of collectTopLevelIds(src)) {
+			const prior = seen.get(id);
+			if (prior !== undefined && prior !== label) {
+				duplicates.push({ id, a: prior, b: label });
+			} else if (prior === undefined) {
+				seen.set(id, label);
+			}
+		}
+	}
+	if (duplicates.length) {
+		const lines = duplicates.map(
+			(d) => `  - "${d.id}" defined in ${d.a} and ${d.b}`,
+		);
+		throw new Error(`Duplicate id(s) found:\n${lines.join("\n")}`);
+	}
+};
 
 const reservedWords = new Set([
 	"abstract",
@@ -81,6 +114,11 @@ const exportDefault = `(id, params) => {
 }
 `;
 export const compile = (src, opts) => {
+	if (Array.isArray(src)) {
+		const sources = src.map((s, i) => ({ label: `source[${i}]`, src: s }));
+		checkDuplicates(sources);
+		src = src.join("\n\n");
+	}
 	const options = {
 		comments: true,
 		errorOnJunk: true,
@@ -508,6 +546,17 @@ const variableNotation = {
 	pascalCase,
 	snakeCase,
 	constantCase,
+};
+
+export const compileFiles = async (paths, opts) => {
+	const sources = await Promise.all(
+		paths.map(async (path) => ({
+			label: path,
+			src: await readFile(path, { encoding: "utf8" }),
+		})),
+	);
+	checkDuplicates(sources);
+	return compile(sources.map((s) => s.src).join("\n\n"), opts);
 };
 
 export default compile;

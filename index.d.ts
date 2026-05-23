@@ -28,7 +28,22 @@ export interface CompileOptions {
 
 /**
  * Compile Fluent (.ftl) source into a JavaScript ESM string.
+ * Pass an array of source strings to join multiple files into one module;
+ * top-level message/term ids must be unique across the set.
  */
-export declare function compile(src: string, opts?: CompileOptions): string;
+export declare function compile(
+	src: string | string[],
+	opts?: CompileOptions,
+): string;
+
+/**
+ * Read and compile one or more Fluent (.ftl) files into a single JavaScript
+ * ESM string. Files are joined in the order supplied. Top-level message/term
+ * ids must be unique across the set.
+ */
+export declare function compileFiles(
+	paths: string[],
+	opts?: CompileOptions,
+): Promise<string>;
 
 export default compile;

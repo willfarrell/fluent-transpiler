@@ -2,9 +2,9 @@
 // Copyright 2026 will Farrell, and fluent-transpiler contributors.
 // SPDX-License-Identifier: MIT
 
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { stat, writeFile } from "node:fs/promises";
 import { Command, Option } from "commander";
-import compile from "./index.js";
+import { compileFiles } from "./index.js";
 
 const fileExists = async (filepath) => {
 	const stats = await stat(filepath);
@@ -16,7 +16,10 @@ const fileExists = async (filepath) => {
 new Command()
 	.name("ftl")
 	.description("Compile Fluent (.ftl) files to JavaScript (.js or .mjs)")
-	.argument("<input>", "Path to the Fluent file to compile")
+	.argument(
+		"<inputs...>",
+		"Paths to the Fluent file(s) to compile. Multiple files are joined in order; ids must be unique across the set.",
+	)
 	.requiredOption(
 		"--locale <locale...>",
 		"What locale(s) to be used. Multiple can be set to allow for fallback. i.e. en-CA",
@@ -68,14 +71,14 @@ new Command()
 			"Path to store the resulting JavaScript file. Will be in ESM.",
 		),
 	)
-	.action(async (input, options) => {
+	.action(async (inputs, options) => {
 		options.comments = options.comments ?? false;
 		try {
-			await fileExists(input);
+			for (const input of inputs) {
+				await fileExists(input);
+			}
 
-			const ftl = await readFile(input, { encoding: "utf8" });
-
-			const js = compile(ftl, options);
+			const js = await compileFiles(inputs, options);
 			if (options.output) {
 				await writeFile(options.output, js, "utf8");
 			} else {

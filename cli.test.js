@@ -105,6 +105,38 @@ test("Should error when input path is a directory", async () => {
 	}
 });
 
+// === Multi-file input ===
+
+test("Should compile multiple files joined in order", async () => {
+	const { stdout } = await run([
+		join(testDir, "files", "joined", "common.ftl"),
+		join(testDir, "files", "joined", "brand.ftl"),
+		join(testDir, "files", "joined", "app.ftl"),
+		"--locale",
+		"en-CA",
+	]);
+	ok(stdout.includes("export const commonHello"));
+	ok(stdout.includes("export const brandTagline"));
+	ok(stdout.includes("export const appGreeting"));
+});
+
+test("Should error with file paths on duplicate ids across files", async () => {
+	try {
+		await run([
+			join(testDir, "files", "joined", "dup-a.ftl"),
+			join(testDir, "files", "joined", "dup-b.ftl"),
+			"--locale",
+			"en-CA",
+		]);
+		ok(false, "Should have thrown");
+	} catch (e) {
+		strictEqual(e.code, 1);
+		ok(e.stderr.includes('"greeting"'));
+		ok(e.stderr.includes("dup-a.ftl"));
+		ok(e.stderr.includes("dup-b.ftl"));
+	}
+});
+
 // === Options: --comments ===
 
 test("Should include comments with --comments", async () => {

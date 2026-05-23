@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { describe, expect, test } from "tstyche";
-import { compile } from "./index.js";
+import { compile, compileFiles } from "./index.js";
 
 describe("compile", () => {
 	test("should accept source string and optional options", () => {
@@ -18,6 +18,18 @@ describe("compile", () => {
 				variableNotation: "camelCase",
 			}),
 		).type.toBe<string>();
+	});
+
+	test("should accept an array of source strings", () => {
+		expect(compile(["a = 1", "b = 2"], { locale: "en" })).type.toBe<string>();
+	});
+});
+
+describe("compileFiles", () => {
+	test("should accept paths and return a Promise<string>", () => {
+		expect(compileFiles(["./a.ftl", "./b.ftl"], { locale: "en" })).type.toBe<
+			Promise<string>
+		>();
 	});
 });
 
