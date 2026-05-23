@@ -10,7 +10,9 @@ updates:
         patterns:
           - "*"
   - package-ecosystem: npm
+    target-branch: develop
     directory: "/"
     schedule:
       interval: "weekly"
-    cooldown-period: 15
+    cooldown:
+      default-days: 15
