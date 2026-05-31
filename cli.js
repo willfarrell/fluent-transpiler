@@ -80,7 +80,7 @@ new Command()
 
 			const js = await compileFiles(inputs, options);
 			if (options.output) {
-				await writeFile(options.output, js, "utf8");
+				await writeFile(options.output, js);
 			} else {
 				console.log(js);
 			}

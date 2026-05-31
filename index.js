@@ -22,10 +22,10 @@ const checkDuplicates = (sources) => {
 	for (const { label, src } of sources) {
 		for (const id of collectTopLevelIds(src)) {
 			const prior = seen.get(id);
-			if (prior !== undefined && prior !== label) {
-				duplicates.push({ id, a: prior, b: label });
-			} else if (prior === undefined) {
+			if (prior === undefined) {
 				seen.set(id, label);
+			} else if (prior !== label) {
+				duplicates.push({ id, a: prior, b: label });
 			}
 		}
 	}
@@ -123,6 +123,9 @@ export const compile = (src, opts) => {
 		comments: true,
 		errorOnJunk: true,
 		includeKey: [],
+		// Stryker disable next-line ArrayDeclaration: equivalent mutant — a bogus
+		// exclude key can never match a generated message id, so seeding the
+		// default with an entry produces identical output.
 		excludeKey: [],
 		excludeValue: undefined,
 		variableNotation: "camelCase",
@@ -151,7 +154,6 @@ export const compile = (src, opts) => {
 		variable = compileType(data);
 		metadata[variable] = {
 			id: data.name,
-			term: false,
 			params: false,
 		};
 		return variable;
@@ -214,7 +216,6 @@ export const compile = (src, opts) => {
 		Term: (data) => {
 			const assignment = compileAssignment(data.id);
 			const templateStringLiteral = compileType(data.value);
-			metadata[assignment].term = true;
 			if (metadata[assignment].params) {
 				return `const ${assignment} = (${options.params}) => ${templateStringLiteral}\n`;
 			}
@@ -245,7 +246,7 @@ export const compile = (src, opts) => {
 			}
 
 			metadata[assignment].attributes = data.attributes.length;
-			let attributes = {};
+			let attributes = "{}";
 			if (metadata[assignment].attributes) {
 				attributes = `{\n${data.attributes
 					.map((data) => {
@@ -254,7 +255,7 @@ export const compile = (src, opts) => {
 					.join(",\n")}\n  }`;
 			}
 
-			let message = "";
+			let message;
 			if (!options.disableMinify) {
 				if (metadata[assignment].attributes) {
 					if (metadata[assignment].params) {
@@ -431,9 +432,7 @@ export const compile = (src, opts) => {
 		},
 	};
 
-	if (/\t/.test(src)) {
-		src = src.replace(/\t/g, "    ");
-	}
+	src = src.replace(/\t/g, "    ");
 
 	const { body } = parse(src);
 	let translations = ``;

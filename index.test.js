@@ -325,43 +325,75 @@ test("Should use constantCase notation", () => {
 // === Reserved words ===
 
 test("Should prefix reserved words with underscore", () => {
+	// Full reserved-word set: every entry must be prefixed so the generated
+	// `const`/`export const` declarations remain valid JavaScript.
 	for (const word of [
-		"const",
-		"default",
-		"enum",
-		"if",
-		"let",
-		"var",
-		"class",
-		"return",
-		"function",
-		"new",
-		"delete",
-		"typeof",
-		"void",
-		"yield",
+		"abstract",
+		"arguments",
 		"await",
-		"switch",
-		"case",
+		"boolean",
 		"break",
-		"continue",
-		"for",
-		"while",
-		"do",
-		"try",
+		"byte",
+		"case",
 		"catch",
-		"finally",
-		"throw",
-		"this",
-		"super",
-		"with",
-		"import",
+		"char",
+		"class",
+		"const",
+		"continue",
+		"debugger",
+		"default",
+		"delete",
+		"do",
+		"double",
+		"else",
+		"enum",
+		"eval",
 		"export",
 		"extends",
-		"static",
+		"false",
+		"final",
+		"finally",
+		"float",
+		"for",
+		"function",
+		"goto",
+		"if",
+		"implements",
+		"import",
 		"in",
-		"of",
 		"instanceof",
+		"int",
+		"interface",
+		"let",
+		"long",
+		"native",
+		"new",
+		"null",
+		"of",
+		"package",
+		"private",
+		"protected",
+		"public",
+		"return",
+		"short",
+		"static",
+		"super",
+		"switch",
+		"synchronized",
+		"this",
+		"throw",
+		"throws",
+		"transient",
+		"true",
+		"try",
+		"typeof",
+		"undefined",
+		"var",
+		"void",
+		"volatile",
+		"while",
+		"with",
+		"yield",
 	]) {
 		const js = compile(`${word} = value`, { locale: "en-CA" });
 		ok(
@@ -749,6 +781,15 @@ test("Should use consistent interface for attributes when disableMinify:true", (
 	ok(js.includes("attributes:"));
 });
 
+test("Should emit an empty object for attributes-less messages when disableMinify:true", () => {
+	const js = compile("msg = Hello", { locale: "en-CA", disableMinify: true });
+	ok(
+		js.includes("attributes:{}"),
+		"a message with no attributes should render attributes as {}",
+	);
+	ok(!js.includes("[object Object]"), "should not stringify a JS object");
+});
+
 test("Should use consistent interface for attributes with params when disableMinify:true", () => {
 	const js = compile(
 		`login = Login { $name }
@@ -871,4 +912,228 @@ test("Should include __locales when __select is used", () => {
 		{ locale: "en-CA" },
 	);
 	ok(js.includes("const __locales"));
+});
+
+// === Duplicate detection across Terms ===
+
+test("Should detect duplicate Term ids across joined sources", () => {
+	throws(
+		() => compile(["-brand = A.\n", "-brand = B.\n"], { locale: "en-CA" }),
+		{ message: /Duplicate id\(s\) found:[\s\S]*"brand"/ },
+	);
+});
+
+test("Should not throw when the same id is repeated within a single source", () => {
+	// Intra-source repeats share one label, so they are not cross-source dupes.
+	const js = compile(["greeting = Hi.\ngreeting = Hey.\n"], {
+		locale: "en-CA",
+	});
+	ok(typeof js === "string");
+});
+
+test("Should list each duplicate id on its own line", () => {
+	throws(
+		() => compile(["a = 1\nb = 2\n", "a = 3\nb = 4\n"], { locale: "en-CA" }),
+		(err) => {
+			// Two duplicates → two "  - " bullet lines joined by a newline.
+			const bullets = err.message.match(/\n {2}- /g) || [];
+			strictEqual(
+				bullets.length,
+				2,
+				"should have one bullet line per duplicate",
+			);
+			return true;
+		},
+	);
+});
+
+// === includeKey / excludeKey: array vs substring semantics ===
+
+test("Should match includeKey exactly, not as a substring", () => {
+	const js = compile("msg = Short\nmsg-one = Long", {
+		locale: "en-CA",
+		includeKey: "msgOne",
+	});
+	ok(js.includes("export const msgOne"), "msgOne should be included");
+	ok(!js.includes("export const msg ="), "msg should not be included");
+});
+
+test("Should match excludeKey exactly, not as a substring", () => {
+	const js = compile("msg = Short\nmsg-one = Long", {
+		locale: "en-CA",
+		excludeKey: "msgOne",
+	});
+	ok(!js.includes("export const msgOne"), "msgOne should be excluded");
+	ok(js.includes("export const msg ="), "msg should remain included");
+});
+
+test("Should omit excluded messages entirely (valid module output)", async () => {
+	const mod = await compileAndImport("msg-one = Hello\nmsg-two = World", {
+		locale: "en-CA",
+		includeKey: ["msgOne"],
+	});
+	strictEqual(mod.default("msg-one"), "Hello");
+	strictEqual(mod.default("msg-two"), "*** msg-two ***");
+});
+
+test("Should produce a valid module when keys are excluded", async () => {
+	const mod = await compileAndImport("msg-one = Hello\nmsg-two = World", {
+		locale: "en-CA",
+		excludeKey: ["msgTwo"],
+	});
+	strictEqual(mod.default("msg-one"), "Hello");
+	strictEqual(mod.default("msg-two"), "*** msg-two ***");
+});
+
+// === excludeValue guard when not provided ===
+
+test("Should not blank a literal 'undefined' value when excludeValue is unset", () => {
+	const js = compile("msg = undefined", { locale: "en-CA" });
+	ok(js.includes("export const msg = `undefined`"));
+});
+
+// === Error cause metadata ===
+
+test("Should attach error and data to the cause on compile failure", () => {
+	throws(
+		() =>
+			compile("valid = { $x }", {
+				locale: "en-CA",
+				variableNotation: "invalid",
+			}),
+		(err) => {
+			ok(err.cause, "error should have a cause");
+			ok(err.cause.error, "cause should carry the original error");
+			ok(err.cause.data, "cause should carry the offending data node");
+			return true;
+		},
+	);
+});
+
+test("Should throw on Junk by default (errorOnJunk defaults to true)", () => {
+	throws(() => compile("-brand-name = {}", { locale: "en-CA" }), {
+		message: "Junk found",
+	});
+});
+
+test("Should attach the Junk data node to the cause when errorOnJunk:true", () => {
+	throws(
+		() => compile("-brand-name = {}", { locale: "en-CA", errorOnJunk: true }),
+		(err) => {
+			strictEqual(err.message, "Junk found");
+			// The Junk error is re-wrapped by compileType; the original Junk
+			// node is carried as the inner error's own cause.
+			ok(err.cause, "outer error should carry a cause");
+			ok(err.cause.error, "cause should carry the original Junk error");
+			ok(
+				err.cause.error.cause,
+				"original Junk error should carry the Junk data node",
+			);
+			return true;
+		},
+	);
+});
+
+// === Comments produce valid modules when stripped ===
+
+test("Should produce a valid module with comments stripped", async () => {
+	const mod = await compileAndImport(
+		`# Comment
+## GroupComment
+### ResourceComment
+msg = Hello
+`,
+		{ locale: "en-CA", comments: false },
+	);
+	strictEqual(mod.default("msg"), "Hello");
+});
+
+// === Junk produces valid module when not erroring ===
+
+test("Should produce a valid module when Junk is dropped (errorOnJunk:false)", async () => {
+	const mod = await compileAndImport("-brand-name = {}\nmsg = Hello", {
+		locale: "en-CA",
+		errorOnJunk: false,
+	});
+	strictEqual(mod.default("msg"), "Hello");
+});
+
+// === TermReference parentheses with disableMinify ===
+
+test("Should call paramless term references with empty parens when disableMinify:true", () => {
+	const js = compile(
+		`-brand = Firefox
+msg = Welcome to { -brand }`,
+		{ locale: "en-CA", disableMinify: true },
+	);
+	ok(js.includes("brand()"), "paramless term ref should compile to brand()");
+});
+
+// === SelectExpression forces a params interface ===
+
+test("Should expose a params interface for messages whose only logic is a select", () => {
+	const js = compile(
+		`msg =
+  { 42 ->
+    [one] One
+   *[other] Other
+  }`,
+		{ locale: "en-CA" },
+	);
+	ok(js.includes("export const msg = (params) =>"));
+});
+
+// === NUMBER function emits its helper without a variable ===
+
+test("Should emit __formatNumber helper for NUMBER with a literal argument", () => {
+	const js = compile("msg = { NUMBER(1000) }", { locale: "en-CA" });
+	ok(
+		js.includes("const __formatNumber ="),
+		"helper definition should be emitted",
+	);
+});
+
+// === Helpers are only emitted when their function is used ===
+
+test("Should not emit any Intl helpers or __locales for a plain message", () => {
+	const js = compile("msg = Hello", { locale: "en-CA" });
+	ok(!js.includes("__locales"), "no __locales for plain message");
+	ok(!js.includes("const __formatDateTime"), "no DateTime helper");
+	ok(!js.includes("const __formatRelativeTime"), "no RelativeTime helper");
+	ok(!js.includes("const __formatNumber"), "no Number helper");
+	ok(!js.includes("const __formatVariable"), "no Variable helper");
+	ok(!js.includes("const __select"), "no select helper");
+});
+
+test("Should emit __formatNumber helper when only a variable is used (no NUMBER)", () => {
+	// __formatVariable alone must trigger the number helper (|| not &&).
+	const js = compile("msg = Hello { $name }", { locale: "en-CA" });
+	ok(js.includes("const __formatVariable"));
+	ok(js.includes("const __formatNumber ="));
+});
+
+// === Join separator between sources ===
+
+test("Should join array sources with a separator so adjacent messages stay distinct", () => {
+	// Sources without trailing newlines would merge into one message if joined
+	// with an empty separator.
+	const js = compile(["msg-a = Hello", "msg-b = World"], { locale: "en-CA" });
+	ok(js.includes("export const msgA"));
+	ok(js.includes("export const msgB"));
+});
+
+test("Should join files with a separator in compileFiles", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "ftl-join-test-"));
+	try {
+		const fileA = join(dir, "a.ftl");
+		const fileB = join(dir, "b.ftl");
+		// No trailing newlines: empty separator would merge them.
+		await writeFile(fileA, "msg-a = Hello", "utf8");
+		await writeFile(fileB, "msg-b = World", "utf8");
+		const js = await compileFiles([fileA, fileB], { locale: "en-CA" });
+		ok(js.includes("export const msgA"));
+		ok(js.includes("export const msgB"));
+	} finally {
+		await rm(dir, { recursive: true });
+	}
 });

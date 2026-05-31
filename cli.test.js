@@ -224,3 +224,113 @@ test("Should exclude specified keys with --exclude-key", async () => {
 		await rm(dir, { recursive: true });
 	}
 });
+
+// === Help output: program metadata and option descriptions ===
+
+test("Should describe the program and every option in --help", async () => {
+	const { stdout } = await run(["--help"]);
+	// program name (usage line) and description
+	ok(stdout.includes("Usage: ftl"), "usage line should show the program name");
+	ok(
+		stdout.includes("Compile Fluent (.ftl) files to JavaScript"),
+		"should show the program description",
+	);
+	// argument + option descriptions
+	ok(stdout.includes("Paths to the Fluent file(s) to compile"));
+	ok(stdout.includes("What locale(s) to be used"));
+	ok(stdout.includes("Include comments in output file."));
+	ok(stdout.includes("Allowed messages to be included"));
+	ok(stdout.includes("Ignored messages to be excluded"));
+	ok(stdout.includes("Set message to an empty string when it contains"));
+	ok(stdout.includes("What variable notation to use with exports"));
+	ok(stdout.includes("all exported messages will have the same interface"));
+	ok(stdout.includes("Wrap placeable with"));
+	ok(stdout.includes("Path to store the resulting JavaScript file"));
+});
+
+// === Default: comments are off unless --comments is passed ===
+
+test("Should exclude comments by default (no --comments)", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "ftl-cli-test-"));
+	const inputPath = join(dir, "input.ftl");
+	try {
+		await writeFile(inputPath, "## Group comment\nmsg = Hello\n", "utf8");
+		const { stdout } = await run([inputPath, "--locale", "en-CA"]);
+		ok(
+			!stdout.includes("// ## Group comment"),
+			"comments should be omitted without --comments",
+		);
+	} finally {
+		await rm(dir, { recursive: true });
+	}
+});
+
+// === Flag presets ===
+
+test("Should enable disableMinify interface with --disable-minify", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "ftl-cli-test-"));
+	const inputPath = join(dir, "input.ftl");
+	try {
+		await writeFile(inputPath, "msg = Hello\n", "utf8");
+		const { stdout } = await run([
+			inputPath,
+			"--locale",
+			"en-CA",
+			"--disable-minify",
+		]);
+		ok(
+			stdout.includes("export const msg = () => ({"),
+			"--disable-minify should force the consistent ({value, attributes}) interface",
+		);
+	} finally {
+		await rm(dir, { recursive: true });
+	}
+});
+
+test("Should wrap placeables with isolating chars with --use-isolating", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "ftl-cli-test-"));
+	const inputPath = join(dir, "input.ftl");
+	try {
+		await writeFile(inputPath, "msg = Hello { $name }\n", "utf8");
+		const { stdout } = await run([
+			inputPath,
+			"--locale",
+			"en-CA",
+			"--use-isolating",
+		]);
+		ok(stdout.includes("\u2068"), "should include isolating start char");
+		ok(stdout.includes("\u2069"), "should include isolating end char");
+	} finally {
+		await rm(dir, { recursive: true });
+	}
+});
+
+// === variable-notation choices are all accepted ===
+
+for (const notation of [
+	"camelCase",
+	"pascalCase",
+	"constantCase",
+	"snakeCase",
+]) {
+	test(`Should accept --variable-notation ${notation}`, async () => {
+		const dir = await mkdtemp(join(tmpdir(), "ftl-cli-test-"));
+		const inputPath = join(dir, "input.ftl");
+		try {
+			await writeFile(inputPath, "my-message = Hello\n", "utf8");
+			const { stdout } = await run([
+				inputPath,
+				"--locale",
+				"en-CA",
+				"--variable-notation",
+				notation,
+			]);
+			ok(
+				stdout.includes("export const"),
+				`${notation} should be a valid choice`,
+			);
+		} finally {
+			await rm(dir, { recursive: true });
+		}
+	});
+}
