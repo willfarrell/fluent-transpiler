@@ -15,7 +15,7 @@
 		"commitlint.config.cjs",
 		"LICENSE",
 		".license.template",
-		".license.config.json",
+		"stryker.config.*",
 		"**/.gitignore",
 		"**/*.fuzz.js",
 		"**/*.perf.js",
