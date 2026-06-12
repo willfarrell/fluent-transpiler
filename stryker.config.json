@@ -6,8 +6,9 @@
 		"command": "node --test --test-force-exit ./**/*.test.js"
 	},
 	"coverageAnalysis": "off",
+	"disableTypeChecks": false,
 	"tempDirName": "/tmp/stryker/fluent-transpiler",
-	"mutate": ["index.js", "cli.js"],
+	"mutate": ["index.js", "program.js"],
 	"reporters": ["progress", "clear-text"],
 	"thresholds": {
 		"high": 100,

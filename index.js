@@ -107,7 +107,7 @@ const reservedWords = new Set([
 ]);
 
 const exportDefault = `(id, params) => {
-  const source = __exports[id] ?? __exports['_'+id]
+  const source = __exports[id]
   if (typeof source === 'undefined') return '*** '+id+' ***'
   if (typeof source === 'function') return source(params)
   return source
@@ -152,6 +152,14 @@ export const compile = (src, opts) => {
 
 	const compileAssignment = (data) => {
 		variable = compileType(data);
+		if (metadata[variable] !== undefined) {
+			// Two declarations of one name (repeated id, term/message overlap, or
+			// ids that merge under the notation transform) would emit duplicate
+			// `const` declarations — an unloadable module.
+			throw new Error(`Duplicate identifier "${variable}"`, {
+				cause: { id: data.name },
+			});
+		}
 		metadata[variable] = {
 			id: data.name,
 			params: false,
@@ -161,12 +169,11 @@ export const compile = (src, opts) => {
 
 	const compileFunctionArguments = (data) => {
 		const positional = data.arguments?.positional.map((data) => {
-			return types[data.type](data);
+			return compileType(data);
 		});
 		const named = data.arguments?.named.reduce((obj, data) => {
-			const entry = compileType(data);
-			const [key, value] = entry.split(": ");
-			obj[key] = value;
+			// `NamedArgument` uses `name` instead of `id`; never transform it
+			obj[data.name.name] = compileType(data.value, data.type);
 			return obj;
 		}, {});
 		return { positional, named };
@@ -202,11 +209,18 @@ export const compile = (src, opts) => {
 			return `  ${key}: ${value}`;
 		},
 		Pattern: (data, parent) => {
+			// Parity with @fluent/bundle: placeables are only isolated when the
+			// pattern mixes them with other elements.
+			const isolate = options.useIsolating && data.elements.length > 1;
 			return (
 				"`" +
 				data.elements
 					.map((data) => {
-						return compileType(data, parent);
+						const value = compileType(data, parent);
+						if (isolate && data.type === "Placeable") {
+							return `\u2068${value}\u2069`;
+						}
+						return value;
 					})
 					.join("") +
 				"`"
@@ -215,7 +229,7 @@ export const compile = (src, opts) => {
 		// resources
 		Term: (data) => {
 			const assignment = compileAssignment(data.id);
-			const templateStringLiteral = compileType(data.value);
+			const templateStringLiteral = compileType(data.value, data.type);
 			if (metadata[assignment].params) {
 				return `const ${assignment} = (${options.params}) => ${templateStringLiteral}\n`;
 			}
@@ -223,20 +237,6 @@ export const compile = (src, opts) => {
 		},
 		Message: (data) => {
 			const assignment = compileAssignment(data.id);
-
-			if (
-				options.includeKey.length &&
-				!options.includeKey.includes(assignment)
-			) {
-				return "";
-			}
-
-			if (
-				options.excludeKey.length &&
-				options.excludeKey.includes(assignment)
-			) {
-				return "";
-			}
 
 			let templateStringLiteral =
 				data.value && compileType(data.value, data.type);
@@ -282,10 +282,25 @@ export const compile = (src, opts) => {
 })\n`;
 			}
 
-			if (assignment === metadata[assignment].id) {
+			// Filters match the exported name or the original FTL id.
+			const id = metadata[assignment].id;
+			if (
+				(options.includeKey.length &&
+					!options.includeKey.includes(assignment) &&
+					!options.includeKey.includes(id)) ||
+				options.excludeKey.includes(assignment) ||
+				options.excludeKey.includes(id)
+			) {
+				// Filtered messages stay as private consts: other messages may
+				// reference them, so dropping the declaration entirely would
+				// break the generated module.
+				return `const ${assignment} = ${message}`;
+			}
+
+			if (assignment === id) {
 				exports.push(`${assignment}`);
 			} else {
-				exports.push(`'${metadata[assignment].id}': ${assignment}`);
+				exports.push(`'${id}': ${assignment}`);
 			}
 			return `export const ${assignment} = ${message}`;
 		},
@@ -309,13 +324,12 @@ export const compile = (src, opts) => {
 		},
 		// Element
 		TextElement: (data) => {
-			return data.value.replaceAll("`", "\\`"); // escape string literal
+			// escape for template literal; backslashes first so the escapes
+			// added for backticks are not themselves escaped
+			return data.value.replaceAll("\\", "\\\\").replaceAll("`", "\\`");
 		},
 		Placeable: (data, parent) => {
-			return `${options.useIsolating ? "\u2068" : ""}\${${compileType(
-				data.expression,
-				parent,
-			)}}${options.useIsolating ? "\u2069" : ""}`;
+			return `\${${compileType(data.expression, parent)}}`;
 		},
 		// Expression
 		StringLiteral: (data, parent) => {
@@ -325,24 +339,36 @@ export const compile = (src, opts) => {
 			}
 			return `"${data.value}"`;
 		},
-		NumberLiteral: (data) => {
-			const decimal = Number.parseFloat(data.value);
-			const number = Number.isInteger(decimal)
-				? Number.parseInt(data.value, 10)
-				: decimal;
-			return Intl.NumberFormat(options.locale).format(number);
+		NumberLiteral: (data, parent) => {
+			const number = Number.parseFloat(data.value);
+			// Pattern text positions display the locale-formatted number (as a
+			// string literal: bare `1,000` inside `${}` is a comma expression).
+			// Argument, selector, and variant-key positions need the raw value
+			// for Intl options and variant matching.
+			if (["Message", "Term", "Variant", "Attribute"].includes(parent)) {
+				return JSON.stringify(Intl.NumberFormat(options.locale).format(number));
+			}
+			return number;
 		},
 		VariableReference: (data, parent) => {
 			functions.__formatVariable = true;
 			metadata[variable].params = true;
-			const value = `${options.params}?.${data.id.name}`;
+			// Fluent identifiers allow dashes; those need bracket access in JS
+			const value = data.id.name.includes("-")
+				? `${options.params}?.[${JSON.stringify(data.id.name)}]`
+				: `${options.params}?.${data.id.name}`;
 			if (["Message", "Variant", "Attribute"].includes(parent)) {
-				return `__formatVariable(${value})`;
+				return `__formatVariable(${value}, ${JSON.stringify(data.id.name)})`;
 			}
 			return value;
 		},
 		MessageReference: (data) => {
 			const messageName = compileType(data.id);
+			if (metadata[messageName] === undefined) {
+				throw new Error(
+					`Unknown reference "${data.id.name}" (messages and terms must be defined before they are referenced)`,
+				);
+			}
 			metadata[variable].params ||= metadata[messageName].params;
 			if (!options.disableMinify) {
 				if (metadata[messageName].params) {
@@ -356,6 +382,11 @@ export const compile = (src, opts) => {
 		},
 		TermReference: (data) => {
 			const termName = compileType(data.id);
+			if (metadata[termName] === undefined) {
+				throw new Error(
+					`Unknown reference "${data.id.name}" (messages and terms must be defined before they are referenced)`,
+				);
+			}
 			metadata[variable].params ||= metadata[termName].params;
 
 			let params;
@@ -379,12 +410,6 @@ export const compile = (src, opts) => {
 			}
 			return `${termName}(${params ? params : ""})`;
 		},
-		NamedArgument: (data) => {
-			// Inconsistent: `NamedArgument` uses `name` instead of `id` for Identifier
-			const key = data.name.name; // Don't transform value
-			const value = compileType(data.value, data.type);
-			return `${key}: ${value}`;
-		},
 		SelectExpression: (data) => {
 			functions.__select = true;
 			metadata[variable].params = true;
@@ -402,16 +427,29 @@ export const compile = (src, opts) => {
 				})
 				.join(",\n")}\n    },\n    ${fallback}\n  )`;
 		},
-		Variant: (data, parent) => {
-			// Inconsistent: `Variant` uses `key` instead of `id` for Identifier
-			const key = compileType(data.key);
+		Variant: (data) => {
+			// Variant keys are runtime match keys (plural categories, selector
+			// values), never identifiers — emit them verbatim. Numeric keys use
+			// the raw value so `cases[1000]` can match (`'1,000'` never would).
+			const key =
+				data.key.type === "Identifier"
+					? data.key.name
+					: Number.parseFloat(data.key.value);
 			const value = compileType(data.value, data.type);
 			return `    '${key}': ${value}`;
 		},
 		FunctionReference: (data) => {
-			return `${types[data.id.name](compileFunctionArguments(data))}`;
+			const fn = functionTypes[data.id.name];
+			if (fn === undefined) {
+				throw new Error(
+					`Unknown function "${data.id.name}" (supported: DATETIME, NUMBER, RELATIVETIME)`,
+				);
+			}
+			return fn(compileFunctionArguments(data));
 		},
-		// Functions
+	};
+
+	const functionTypes = {
 		DATETIME: (data) => {
 			functions.__formatDateTime = true;
 			const { positional, named } = data;
@@ -440,7 +478,7 @@ export const compile = (src, opts) => {
 		translations += compileType(data);
 	}
 
-	let output = ``;
+	let output = `// Generated by fluent-transpiler. Do not edit.\n`;
 	if (
 		functions.__formatVariable ||
 		functions.__formatDateTime ||
@@ -482,7 +520,7 @@ const __relativeTimeDiff = (d) => {
   return [Math.round(elapsed / msPerYear), 'year']
 }
 const __formatRelativeTime = (value, options) => {
-  if (typeof value === 'string') value = new Date(value)
+  if (!(value instanceof Date)) value = new Date(value)
   if (isNaN(value.getTime())) return value
   try {
     const [duration, unit] = __relativeTimeDiff(value)
@@ -499,7 +537,7 @@ const __formatRelativeTime = (value, options) => {
 	if (functions.__formatDateTime) {
 		output += `
 const __formatDateTime = (value, options) => {
-  if (typeof value === 'string') value = new Date(value)
+  if (!(value instanceof Date)) value = new Date(value)
   if (isNaN(value.getTime())) return value
   const k = JSON.stringify(options) ?? ''
   return (__intlCache['D'+k] ??= new Intl.DateTimeFormat(__locales, options)).format(value)
@@ -516,8 +554,9 @@ const __formatNumber = (value, options) => {
 	}
 	if (functions.__formatVariable) {
 		output += `
-const __formatVariable = (value) => {
+const __formatVariable = (value, name) => {
   if (typeof value === 'string') return value
+  if (value === undefined || value === null) return '{$'+name+'}'
   const decimal = Number.parseFloat(value)
   const number = Number.isInteger(decimal) ? Number.parseInt(value, 10) : decimal
   return __formatNumber(number)
@@ -526,9 +565,8 @@ const __formatVariable = (value) => {
 	}
 	if (functions.__select) {
 		output += `
-const __select = (value, cases, fallback, options) => {
-  const k = JSON.stringify(options) ?? ''
-  const rule = (__intlCache['P'+k] ??= new Intl.PluralRules(__locales, options)).select(value)
+const __select = (value, cases, fallback) => {
+  const rule = (__intlCache.P ??= new Intl.PluralRules(__locales)).select(value)
   return cases[value] ?? cases[rule] ?? fallback
 }
 `;
