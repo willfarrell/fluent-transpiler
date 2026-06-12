@@ -3,7 +3,7 @@
 
 export interface CompileOptions {
 	/** What locale(s) to be used. Multiple can be set to allow for fallback. */
-	locale?: string | string[];
+	locale: string | string[];
 	/** Include comments in output file. Default: `true` */
 	comments?: boolean;
 	/** Throw error when `Junk` is parsed. Default: `true` */
@@ -12,7 +12,7 @@ export interface CompileOptions {
 	includeKey?: string | string[];
 	/** Array of message keys to exclude. Default: `[]` (exclude none) */
 	excludeKey?: string | string[];
-	/** Set message to an empty string when it contains this value. */
+	/** Set message to an empty string when it equals this value. */
 	excludeValue?: string;
 	/** What variable notation to use with exports. Default: `"camelCase"` */
 	variableNotation?: "camelCase" | "pascalCase" | "snakeCase" | "constantCase";

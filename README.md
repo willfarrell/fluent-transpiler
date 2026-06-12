@@ -49,7 +49,7 @@ Options:
   --comments                              Include comments in output file.
   --include-key <keys...>                 Allowed messages to be included. Default to include all.
   --exclude-key <keys...>                 Ignored messages to be excluded. Default to exclude none.
-  --exclude-value <value>                 Set message to an empty string when it contains this value.
+  --exclude-value <value>                 Set message to an empty string when it equals this value.
   --variable-notation <variableNotation>  What variable notation to use with exports (choices: "camelCase", "pascalCase", "constantCase",
                                           "snakeCase", default: "camelCase")
   --disable-minify                        If disabled, all exported messages will have the same interface `(params) => ({value, attributes})`.
@@ -64,14 +64,18 @@ Options:
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | locale           | What locale(s) to be used. Multiple can be set to allow for fallback. i.e. `en-CA`                                                                                                                                                                           |
 | comments         | Include comments in output file. Default: `true`                                                                                                                                                                                                             |
-| includeKey       | Array of message keys to include. Default: `[]` (include all)                                                                                                                                                                                                |
-| excludeKey       | Array of message keys to exclude. Default: `[]` (exclude none)                                                                                                                                                                                               |
-| excludeValue     | Set message to an empty string when it contains this value. Default: `undefined`                                                                                                                                                                             |
+| includeKey       | Array of message keys to include; matches the exported name (`msgOne`) or the original FTL id (`msg-one`). Non-included messages remain private consts so references keep working. Default: `[]` (include all)                                                                                                                                                                                                |
+| excludeKey       | Array of message keys to exclude; matches the exported name (`msgOne`) or the original FTL id (`msg-one`). Excluded messages remain private consts so references keep working. Default: `[]` (exclude none)                                                                                                                                                                                               |
+| excludeValue     | Set message to an empty string when it equals this value. Default: `undefined`                                                                                                                                                                             |
 | disableMinify    | If disabled, all exported messages will have the same interface `(params) => ({value, attributes})`. Default: each exported message could be a different type based on what is needed to generate the message (`string`, `object`, `() => ''`, `() => ({})`) |
 | errorOnJunk      | Throw error when `Junk` is parsed. Default: `true`                                                                                                                                                                                                           |
 | variableNotation | What variable notation to use with exports. Choices: `camelCase`, `pascalCase`, `snakeCase`, `constantCase`. Default: `camelCase`                                                                                                                            |
 | useIsolating     | Wrap placeable with \u2068 and \u2069. Default: `false`                                                                                                                                                                                                      |
+| params           | Parameter name used in generated message functions. Default: `params`                                                                                                                                                                                        |
 | exportDefault    | Allows the overwriting of the `export default` to allow for custom uses. Default: See code                                                                                                                                                                   |
+
+Messages and terms must be defined before they are referenced; referencing a
+later definition is a compile error.
 
 ```javascript
 import { readFile, writeFile } from 'node:fs/promises'

@@ -23,6 +23,10 @@ describe("compile", () => {
 	test("should accept an array of source strings", () => {
 		expect(compile(["a = 1", "b = 2"], { locale: "en" })).type.toBe<string>();
 	});
+
+	test("should require locale when options are provided", () => {
+		expect(compile("hello = Hello", {})).type.toRaiseError();
+	});
 });
 
 describe("compileFiles", () => {

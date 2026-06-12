@@ -2,14 +2,14 @@ import test from "node:test";
 import fc from "fast-check";
 import { compile } from "./index.js";
 
+// Errors compile() throws on purpose; anything else is a bug.
+const expectedErrors = [
+	"Duplicate identifier",
+	"Unknown reference",
+	"Unknown function",
+];
+
 const catchError = (input, e) => {
-	const expectedErrors = [
-		"Junk found",
-		"Cannot read properties",
-		"is not a function",
-		"Cannot destructure",
-		"undefined",
-	];
 	for (const expected of expectedErrors) {
 		if (e.message?.includes(expected)) {
 			return;
@@ -19,15 +19,36 @@ const catchError = (input, e) => {
 	throw e;
 };
 
+// Compile the input and prove the generated module parses and evaluates.
+const assertCompiles = async (src, opts) => {
+	let js;
+	try {
+		js = compile(src, { errorOnJunk: false, ...opts });
+	} catch (e) {
+		catchError(src, e);
+		return;
+	}
+	if (typeof js !== "string") {
+		throw new Error("Expected string output");
+	}
+	try {
+		await import(`data:text/javascript,${encodeURIComponent(js)}`);
+	} catch (e) {
+		console.error("Generated module failed to load for input:", src, e);
+		throw e;
+	}
+};
+
 // Arbitrary for valid Fluent identifiers
 const fluentIdentifier = fc
 	.stringMatching(/^[a-zA-Z][a-zA-Z0-9-]*$/)
 	.filter((s) => s.length >= 1 && s.length <= 30);
 
-// Arbitrary for simple text values (no special Fluent characters)
+// Arbitrary for text values without Fluent syntax characters; backslashes,
+// backticks, and quotes stay in to exercise output escaping
 const safeTextValue = fc
 	.string()
-	.map((s) => s.replace(/[{}`\\\n\r\t#]/g, "").trim())
+	.map((s) => s.replace(/[{}\n\r]/g, "").trim())
 	.filter((s) => s.length > 0);
 
 // Arbitrary for valid simple Fluent messages
@@ -89,14 +110,7 @@ const locale = fc.constantFrom(
 test("fuzz: compile with random simple messages", async () => {
 	await fc.assert(
 		fc.asyncProperty(simpleMessage, locale, async (msg, loc) => {
-			try {
-				const result = compile(msg, { locale: loc, errorOnJunk: false });
-				if (typeof result !== "string") {
-					throw new Error("Expected string output");
-				}
-			} catch (e) {
-				catchError(msg, e);
-			}
+			await assertCompiles(msg, { locale: loc });
 		}),
 		{ numRuns: 1_000, verbose: 2, examples: [] },
 	);
@@ -105,14 +119,7 @@ test("fuzz: compile with random simple messages", async () => {
 test("fuzz: compile with random messages with placeables", async () => {
 	await fc.assert(
 		fc.asyncProperty(messageWithPlaceable, locale, async (msg, loc) => {
-			try {
-				const result = compile(msg, { locale: loc, errorOnJunk: false });
-				if (typeof result !== "string") {
-					throw new Error("Expected string output");
-				}
-			} catch (e) {
-				catchError(msg, e);
-			}
+			await assertCompiles(msg, { locale: loc });
 		}),
 		{ numRuns: 1_000, verbose: 2, examples: [] },
 	);
@@ -121,14 +128,7 @@ test("fuzz: compile with random messages with placeables", async () => {
 test("fuzz: compile with random selectors", async () => {
 	await fc.assert(
 		fc.asyncProperty(messageWithSelector, locale, async (msg, loc) => {
-			try {
-				const result = compile(msg, { locale: loc, errorOnJunk: false });
-				if (typeof result !== "string") {
-					throw new Error("Expected string output");
-				}
-			} catch (e) {
-				catchError(msg, e);
-			}
+			await assertCompiles(msg, { locale: loc });
 		}),
 		{ numRuns: 1_000, verbose: 2, examples: [] },
 	);
@@ -141,15 +141,7 @@ test("fuzz: compile with random terms", async () => {
 			simpleMessage,
 			locale,
 			async (term, msg, loc) => {
-				try {
-					const src = `${term}\n${msg}`;
-					const result = compile(src, { locale: loc, errorOnJunk: false });
-					if (typeof result !== "string") {
-						throw new Error("Expected string output");
-					}
-				} catch (e) {
-					catchError(`${term}\n${msg}`, e);
-				}
+				await assertCompiles(`${term}\n${msg}`, { locale: loc });
 			},
 		),
 		{ numRuns: 1_000, verbose: 2, examples: [] },
@@ -159,14 +151,7 @@ test("fuzz: compile with random terms", async () => {
 test("fuzz: compile with random attributes", async () => {
 	await fc.assert(
 		fc.asyncProperty(messageWithAttributes, locale, async (msg, loc) => {
-			try {
-				const result = compile(msg, { locale: loc, errorOnJunk: false });
-				if (typeof result !== "string") {
-					throw new Error("Expected string output");
-				}
-			} catch (e) {
-				catchError(msg, e);
-			}
+			await assertCompiles(msg, { locale: loc });
 		}),
 		{ numRuns: 1_000, verbose: 2, examples: [] },
 	);
@@ -182,21 +167,13 @@ test("fuzz: compile with random options", async () => {
 			fc.boolean(),
 			fc.boolean(),
 			async (msg, loc, notation, disableMinify, useIsolating, comments) => {
-				try {
-					const result = compile(msg, {
-						locale: loc,
-						variableNotation: notation,
-						disableMinify,
-						useIsolating,
-						comments,
-						errorOnJunk: false,
-					});
-					if (typeof result !== "string") {
-						throw new Error("Expected string output");
-					}
-				} catch (e) {
-					catchError(msg, e);
-				}
+				await assertCompiles(msg, {
+					locale: loc,
+					variableNotation: notation,
+					disableMinify,
+					useIsolating,
+					comments,
+				});
 			},
 		),
 		{ numRuns: 1_000, verbose: 2, examples: [] },
@@ -206,17 +183,7 @@ test("fuzz: compile with random options", async () => {
 test("fuzz: compile with completely random strings (errorOnJunk:false)", async () => {
 	await fc.assert(
 		fc.asyncProperty(fc.string(), async (input) => {
-			try {
-				const result = compile(input, {
-					locale: "en-CA",
-					errorOnJunk: false,
-				});
-				if (typeof result !== "string") {
-					throw new Error("Expected string output");
-				}
-			} catch (e) {
-				catchError(input, e);
-			}
+			await assertCompiles(input, { locale: "en-CA" });
 		}),
 		{ numRuns: 1_000, verbose: 2, examples: [] },
 	);
@@ -228,15 +195,7 @@ test("fuzz: compile with multiple messages combined", async () => {
 			fc.array(simpleMessage, { minLength: 1, maxLength: 20 }),
 			locale,
 			async (messages, loc) => {
-				try {
-					const src = messages.join("\n");
-					const result = compile(src, { locale: loc, errorOnJunk: false });
-					if (typeof result !== "string") {
-						throw new Error("Expected string output");
-					}
-				} catch (e) {
-					catchError(messages.join("\n"), e);
-				}
+				await assertCompiles(messages.join("\n"), { locale: loc });
 			},
 		),
 		{ numRuns: 500, verbose: 2, examples: [] },
