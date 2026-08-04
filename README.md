@@ -40,20 +40,18 @@ Usage: ftl [options] <inputs...>
 Compile Fluent (.ftl) files to JavaScript (.js or .mjs)
 
 Arguments:
-  inputs                                  Paths to the Fluent file(s) to compile.
-                                          Multiple files are joined in order;
-                                          ids must be unique across the set.
+  inputs                                  Paths to the Fluent file(s) to compile. Multiple files are joined in order; ids must be unique across the set.
 
 Options:
   --locale <locale...>                    What locale(s) to be used. Multiple can be set to allow for fallback. i.e. en-CA
   --comments                              Include comments in output file.
-  --include-key <keys...>                 Allowed messages to be included. Default to include all.
-  --exclude-key <keys...>                 Ignored messages to be excluded. Default to exclude none.
-  --exclude-value <value>                 Set message to an empty string when it equals this value.
-  --variable-notation <variableNotation>  What variable notation to use with exports (choices: "camelCase", "pascalCase", "constantCase",
-                                          "snakeCase", default: "camelCase")
+  --include-key <includeMessageKey...>    Allowed messages to be included. Default to include all.
+  --exclude-key <excludeMessageKey...>    Ignored messages to be excluded. Default to exclude none.
+  --exclude-value <excludeMessageValue>   Set message to an empty string when it equals this value. Default to not allowing empty strings.
+  --variable-notation <variableNotation>  What variable notation to use with exports (choices: "camelCase", "pascalCase", "constantCase", "snakeCase", default: "camelCase")
   --disable-minify                        If disabled, all exported messages will have the same interface `(params) => ({value, attributes})`.
   --use-isolating                         Wrap placeable with \u2068 and \u2069.
+  --no-error-on-junk                      Skip `Junk` instead of throwing an error.
   -o, --output <output>                   Path to store the resulting JavaScript file. Will be in ESM.
   -h, --help                              display help for command
 ```
@@ -84,6 +82,62 @@ import fluentTranspiler from 'fluent-transpiler'
 const ftl = await readFile('./path/to/en.ftl', { encoding: 'utf8' })
 const js = fluentTranspiler(ftl, { locale: 'en-CA' })
 await writeFile('./path/to/en.mjs', js, 'utf8')
+```
+
+### Attributes
+
+A message that has attributes compiles to a `{value, attributes}` record.
+`{ message }` resolves to its `.value` and `{ message.attr }` resolves to the
+named attribute. Referencing an attribute that does not exist is a compile
+error: `Unknown attribute "msg.missing"`.
+
+```ftl
+login = Sign in
+    .title = Sign in to your account
+tooltip = { login.title }
+```
+
+```javascript
+export const login = {
+  value: `Sign in`,
+  attributes: {
+    title: `Sign in to your account`
+  }
+}
+export const tooltip = `${login.attributes.title}`
+```
+
+Term attributes are emitted as well. A term that has attributes compiles to a
+`{value, attributes}` record; a term without attributes stays a bare string.
+Per the Fluent spec a term attribute is only valid in selector position — a bare
+`{ -brand.gender }` in a pattern is invalid Fluent and the parser rejects it as
+`Junk`.
+
+```ftl
+-brand = Aurora
+    .gender = feminine
+
+brand-updated = { -brand.gender ->
+    [feminine] { -brand } has been updated.
+   *[other] The { -brand } app has been updated.
+  }
+```
+
+```javascript
+const brand = {
+  value: `Aurora`,
+  attributes: {
+    gender: `feminine`
+  }
+}
+export const brandUpdated = (params) => `${__select(
+    brand.attributes.gender,
+    {
+      __proto__: null,
+      'feminine': `${brand.value} has been updated.`
+    },
+    `The ${brand.value} app has been updated.`
+  )}`
 ```
 
 ### Joining multiple files

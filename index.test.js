@@ -73,7 +73,7 @@ test("Should throw on duplicate ids across joined sources", () => {
 			compile(["greeting = Hi from A.\n", "greeting = Hi from B.\n"], {
 				locale: "en-CA",
 			}),
-		{ message: /Duplicate id\(s\) found:[\s\S]*"greeting"/ },
+		{ message: /Duplicate identifier "greeting"/ },
 	);
 });
 
@@ -91,16 +91,32 @@ test("Should compile multiple files with compileFiles", async () => {
 	ok(js.includes("export const commonHello"));
 });
 
-test("Should surface file paths in compileFiles duplicate errors", async () => {
+test("Should throw on duplicate ids across files in compileFiles", async () => {
 	await rejects(
 		() =>
 			compileFiles(
 				["./test/files/joined/dup-a.ftl", "./test/files/joined/dup-b.ftl"],
 				{ locale: "en-CA" },
 			),
-		{
-			message:
-				/Duplicate id\(s\) found:[\s\S]*"greeting"[\s\S]*dup-a\.ftl[\s\S]*dup-b\.ftl/,
+		{ message: /Duplicate identifier "greeting"/ },
+	);
+});
+
+test("Should name the offending path when an input cannot be read", async () => {
+	// Node's EISDIR carries no path at all, so with several inputs the bare
+	// error would not say which one failed.
+	await rejects(() => compileFiles(["./test/files"], { locale: "en-CA" }), {
+		message: /test\/files.*EISDIR/,
+	});
+	await rejects(() => compileFiles(["./nope.ftl"], { locale: "en-CA" }), {
+		message: /nope\.ftl.*ENOENT/,
+	});
+	// the original fs error stays reachable for programmatic handling
+	await rejects(
+		() => compileFiles(["./nope.ftl"], { locale: "en-CA" }),
+		(e) => {
+			strictEqual(e.cause.code, "ENOENT");
+			return true;
 		},
 	);
 });
@@ -354,91 +370,53 @@ test("Should use constantCase notation", () => {
 
 // === Reserved words ===
 
-test("Should prefix reserved words with underscore", () => {
-	// Full reserved-word set: every entry must be prefixed so the generated
-	// `const`/`export const` declarations remain valid JavaScript.
-	for (const word of [
-		"abstract",
-		"arguments",
-		"await",
-		"boolean",
-		"break",
-		"byte",
-		"case",
-		"catch",
-		"char",
+test("Should produce a loadable module for ids that collide with JavaScript", async () => {
+	// The property that matters is not *how* a name is mangled but that the
+	// generated module still parses and evaluates: a bare `const class = ...`
+	// will not parse, and a bare `const Date = ...` shadows a global the
+	// emitted Intl helpers depend on.
+	const hazards = [
 		"class",
 		"const",
-		"continue",
-		"debugger",
-		"default",
-		"delete",
-		"do",
-		"double",
-		"else",
-		"enum",
-		"eval",
-		"export",
-		"extends",
-		"false",
-		"final",
-		"finally",
-		"float",
-		"for",
-		"function",
-		"goto",
-		"if",
-		"implements",
-		"import",
-		"in",
-		"instanceof",
-		"int",
-		"interface",
-		"let",
-		"long",
-		"native",
-		"new",
-		"null",
-		"of",
-		"package",
-		"private",
-		"protected",
-		"public",
 		"return",
-		"short",
-		"static",
-		"super",
-		"switch",
-		"synchronized",
-		"this",
-		"throw",
-		"throws",
-		"transient",
-		"true",
-		"try",
 		"typeof",
+		"await",
+		"import",
+		"export",
+		"default",
+		"this",
+		"null",
+		"true",
+		"false",
 		"undefined",
-		"var",
-		"void",
-		"volatile",
-		"while",
-		"with",
+		"arguments",
+		"eval",
+		"let",
+		"static",
 		"yield",
-	]) {
-		const js = compile(`${word} = value`, { locale: "en-CA" });
-		ok(
-			js.includes(`export const _${word}`),
-			`Should prefix "${word}" with underscore`,
-		);
+		"date",
+		"intl",
+		"json",
+		"math",
+		"number",
+	];
+	for (const word of hazards) {
+		for (const notation of ["camelCase", "pascalCase"]) {
+			const mod = await compileAndImport(
+				`${word} = value\nwhen = { DATETIME($d) } { NUMBER($n) } { $v }`,
+				{ locale: "en-CA", variableNotation: notation },
+			);
+			strictEqual(
+				mod.default(word),
+				"value",
+				`"${word}" (${notation}) should round-trip`,
+			);
+			ok(
+				mod.default("when", { d: 0, n: 1, v: 2 }).length > 0,
+				`"${word}" (${notation}) should not break the Intl helpers`,
+			);
+		}
 	}
-});
-
-// === Tab replacement ===
-
-test("Should replace tabs with spaces", () => {
-	const js = compile("msg = Hello\tworld", { locale: "en-CA" });
-	ok(js.includes("Hello    world"));
-	ok(!js.includes("\t"));
 });
 
 // === Backtick escaping ===
@@ -882,7 +860,9 @@ test("Should produce output matching @fluent/bundle", async () => {
 			if (quoted) return quoted[1];
 			// text -> text (identifier matches FTL id)
 			return s.split(":")[0].trim();
-		});
+		})
+		// the null-prototype sentinel is not a message id
+		.filter((id) => id !== "__proto__");
 
 	// termWithVariable: transpiler correctly propagates params through terms,
 	// while @fluent/bundle does not pass external params to terms by design
@@ -1101,7 +1081,7 @@ test("Should include __locales when __select is used", () => {
 test("Should detect duplicate Term ids across joined sources", () => {
 	throws(
 		() => compile(["-brand = A.\n", "-brand = B.\n"], { locale: "en-CA" }),
-		{ message: /Duplicate id\(s\) found:[\s\S]*"brand"/ },
+		{ message: /Duplicate identifier "brand"/ },
 	);
 });
 
@@ -1150,18 +1130,12 @@ test("Should report intra-source repeats in array input as duplicate identifiers
 	);
 });
 
-test("Should list each duplicate id on its own line", () => {
+test("Should report the first duplicate id when a source has several", () => {
+	// Compilation stops at the first collision rather than collecting them all.
 	throws(
 		() => compile(["a = 1\nb = 2\n", "a = 3\nb = 4\n"], { locale: "en-CA" }),
-		(err) => {
-			// Two duplicates → two "  - " bullet lines joined by a newline.
-			const bullets = err.message.match(/\n {2}- /g) || [];
-			strictEqual(
-				bullets.length,
-				2,
-				"should have one bullet line per duplicate",
-			);
-			return true;
+		{
+			message: /Duplicate identifier "a"/,
 		},
 	);
 });
@@ -1315,17 +1289,6 @@ test("Should produce a valid module when Junk is dropped (errorOnJunk:false)", a
 		errorOnJunk: false,
 	});
 	strictEqual(mod.default("msg"), "Hello");
-});
-
-// === TermReference parentheses with disableMinify ===
-
-test("Should call paramless term references with empty parens when disableMinify:true", () => {
-	const js = compile(
-		`-brand = Firefox
-msg = Welcome to { -brand }`,
-		{ locale: "en-CA", disableMinify: true },
-	);
-	ok(js.includes("brand()"), "paramless term ref should compile to brand()");
 });
 
 // === SelectExpression forces a params interface ===
@@ -1547,4 +1510,400 @@ test("Should use the default variant (not the last) as the __select fallback", (
 		!js.includes("`One item`\n  )"),
 		"a non-default variant must not become the fallback",
 	);
+});
+
+// === Selector lookups must not reach Object.prototype ===
+
+test("Should use the fallback for selector values that name Object.prototype members", async () => {
+	// `cases` is an object literal, so `cases['constructor']` would otherwise
+	// resolve up the prototype chain and render an internal function.
+	const mod = await compileAndImport(
+		`msg =
+  { $x ->
+    [one] One item
+   *[other] Many items
+  }`,
+		{ locale: "en-CA" },
+	);
+	strictEqual(mod.msg({ x: "one" }), "One item");
+	for (const hostile of [
+		"__proto__",
+		"constructor",
+		"toString",
+		"hasOwnProperty",
+		"valueOf",
+	]) {
+		strictEqual(
+			mod.msg({ x: hostile }),
+			"Many items",
+			`selector value "${hostile}" should fall back to the default variant`,
+		);
+	}
+});
+
+test("Should report unknown ids for default-export lookups that name Object.prototype members", async () => {
+	// `__exports[id]` would otherwise resolve up the prototype chain and either
+	// return or *call* an inherited function.
+	const mod = await compileAndImport("a = A", { locale: "en-CA" });
+	strictEqual(mod.default("a"), "A");
+	for (const hostile of [
+		"__proto__",
+		"constructor",
+		"toString",
+		"hasOwnProperty",
+		"valueOf",
+	]) {
+		strictEqual(
+			mod.default(hostile),
+			`*** ${hostile} ***`,
+			`id "${hostile}" should be reported as unknown`,
+		);
+	}
+});
+
+// === Fluent string-literal escapes ===
+
+test("Should resolve every Fluent string-literal escape", async () => {
+	// StringLiteral.value is raw source, so Fluent's escapes have to be
+	// resolved rather than handed to the JavaScript parser: `\UXXXXXX` is a
+	// Fluent escape but not a JavaScript one.
+	const cases = [
+		[String.raw`\u0041`, "A", "4-digit unicode escape"],
+		[String.raw`\U01F600`, "\u{1F600}", "6-digit unicode escape"],
+		[String.raw`\"`, '"', "escaped quote"],
+		[String.raw`\\`, "\\", "escaped backslash"],
+	];
+	for (const [sequence, expected, label] of cases) {
+		const mod = await compileAndImport(`msg = { "${sequence}" }`, {
+			locale: "en-CA",
+		});
+		strictEqual(mod.msg, expected, label);
+	}
+});
+
+// === Tabs ===
+
+test("Should preserve tabs inside a message value", async () => {
+	// Tabs are normalized so tab-indented FTL still parses, but that must not
+	// reach the message content itself.
+	const mod = await compileAndImport("msg = a" + "\t" + "b", {
+		locale: "en-CA",
+	});
+	strictEqual(mod.msg, "a" + "\t" + "b");
+});
+
+test("Should still accept tab-indented continuation lines", async () => {
+	// The normalization exists so tab indentation does not become Junk. Every
+	// leading tab has to go: leaving one behind puts it in the value.
+	const mod = await compileAndImport(
+		"msg =" + "\n" + "\t\t" + "one" + "\n" + "\t\t" + "two",
+		{ locale: "en-CA" },
+	);
+	strictEqual(mod.msg, "one" + "\n" + "two");
+});
+
+// === Attribute references ===
+
+test("Should render the value when referencing a message that has attributes", async () => {
+	// The reference must resolve to the message's value; emitting the whole
+	// {value, attributes} record stringifies as "[object Object]".
+	const src = `other = Hi
+    .alt = Alt text
+msg = { other } there`;
+	const mod = await compileAndImport(src, { locale: "en-CA" });
+	const reference = createBundleHelper("en-CA", src);
+	strictEqual(mod.msg, "Hi there");
+	strictEqual(mod.msg, reference("msg"));
+});
+
+// === disableMinify references resolve to real values ===
+
+test("Should resolve a paramless term reference when disableMinify:true", async () => {
+	// Terms are never exported, so disableMinify does not make them callable;
+	// calling one that compiled to a string const throws at runtime.
+	const src = `-brand = Firefox
+msg = Welcome to { -brand }`;
+	const mod = await compileAndImport(src, {
+		locale: "en-CA",
+		disableMinify: true,
+	});
+	strictEqual(mod.msg().value, "Welcome to Firefox");
+	strictEqual(mod.msg().value, createBundleHelper("en-CA", src)("msg"));
+});
+
+test("Should resolve a message reference when disableMinify:true", async () => {
+	// Every message is a {value, attributes} record under disableMinify, so a
+	// reference must reach for the value.
+	const src = `base = Hello
+ref = { base } World`;
+	const mod = await compileAndImport(src, {
+		locale: "en-CA",
+		disableMinify: true,
+	});
+	strictEqual(mod.ref().value, "Hello World");
+	strictEqual(mod.ref().value, createBundleHelper("en-CA", src)("ref"));
+});
+
+test("Should resolve a message attribute reference", async () => {
+	const src = `other = Hi
+    .alt = Alt text
+msg = Shows { other.alt }`;
+	const mod = await compileAndImport(src, { locale: "en-CA" });
+	strictEqual(mod.msg, "Shows Alt text");
+	strictEqual(mod.msg, createBundleHelper("en-CA", src)("msg"));
+});
+
+test("Should resolve a message attribute reference with a dashed name", async () => {
+	const src = `login = Login
+    .aria-label = Login input
+msg = Shows { login.aria-label }`;
+	const mod = await compileAndImport(src, { locale: "en-CA" });
+	strictEqual(mod.msg, "Shows Login input");
+	strictEqual(mod.msg, createBundleHelper("en-CA", src)("msg"));
+});
+
+test("Should reject a reference to an attribute that does not exist", () => {
+	throws(
+		() =>
+			compile(
+				`other = Hi
+    .alt = Alt text
+msg = { other.missing }`,
+				{ locale: "en-CA" },
+			),
+		{ message: /Unknown attribute "other\.missing"/ },
+	);
+});
+
+test("Should select on a term attribute", async () => {
+	// Term attributes are only valid in selector position per the Fluent spec;
+	// this is the gendered-term pattern.
+	const src = `-brand = Firefox
+    .gender = masculine
+msg =
+    { -brand.gender ->
+        [masculine] el { -brand }
+       *[feminine] la { -brand }
+    }`;
+	const mod = await compileAndImport(src, { locale: "en-CA" });
+	strictEqual(mod.msg(), "el Firefox");
+	strictEqual(mod.msg(), createBundleHelper("en-CA", src)("msg"));
+});
+
+// === Identifiers that would break the generated module ===
+
+test("Should not rename ids that are legal JavaScript identifiers", async () => {
+	// These are Java keywords, not JavaScript ones; prefixing them produced
+	// needlessly mangled export names.
+	const src = "float = a\nbyte = b\ngoto = c\nnative = d\nsynchronized = e";
+	const mod = await compileAndImport(src, { locale: "en-CA" });
+	deepStrictEqual(
+		{ ...mod, default: undefined },
+		{
+			float: "a",
+			byte: "b",
+			goto: "c",
+			native: "d",
+			synchronized: "e",
+			default: undefined,
+		},
+	);
+});
+
+test("Should rename ids that collide with JavaScript reserved words", () => {
+	const js = compile("class = a\nreturn = b\ntypeof = c", { locale: "en-CA" });
+	for (const word of ["class", "return", "typeof"]) {
+		ok(js.includes(`export const _${word} =`), `${word} should be prefixed`);
+	}
+});
+
+test("Should rename ids that would shadow a global the runtime helpers use", async () => {
+	// pascalCase turns `date` into `Date`; an unprefixed `const Date` shadows
+	// the global that __formatDateTime depends on.
+	const src = "date = Today\nwhen = It is { DATETIME($d) }";
+	const mod = await compileAndImport(src, {
+		locale: "en-CA",
+		variableNotation: "pascalCase",
+	});
+	strictEqual(mod._Date, "Today");
+	ok(mod.When({ d: "2020-01-02T00:00:00Z" }).startsWith("It is "));
+});
+
+// === variableNotation transforms ===
+
+test("Should map ids to export names consistently across notations", () => {
+	// Characterization of the notation transforms. The digit and acronym rules
+	// are the non-obvious ones: a word cannot start with an uppercased digit,
+	// so `msg-2` gains a delimiter instead.
+	const table = [
+		["msg", "msg", "Msg", "msg", "MSG"],
+		["msg-one", "msgOne", "MsgOne", "msg_one", "MSG_ONE"],
+		["msg-one-two", "msgOneTwo", "MsgOneTwo", "msg_one_two", "MSG_ONE_TWO"],
+		["msgOne", "msgOne", "MsgOne", "msg_one", "MSG_ONE"],
+		["MSG_ONE", "msgOne", "MsgOne", "msg_one", "MSG_ONE"],
+		["msg_one", "msgOne", "MsgOne", "msg_one", "MSG_ONE"],
+		["a", "a", "A", "a", "A"],
+		["msg2", "msg2", "Msg2", "msg2", "MSG2"],
+		["msg-2", "msg_2", "Msg_2", "msg_2", "MSG_2"],
+		["msg2x", "msg2x", "Msg2x", "msg2x", "MSG2X"],
+		["msg-0", "msg_0", "Msg_0", "msg_0", "MSG_0"],
+		["msg-9", "msg_9", "Msg_9", "msg_9", "MSG_9"],
+		["msg-x2", "msgX2", "MsgX2", "msg_x2", "MSG_X2"],
+		["HTTPServer", "httpServer", "HttpServer", "http_server", "HTTP_SERVER"],
+		["aB", "aB", "AB", "a_b", "A_B"],
+		["a-b-c", "aBC", "ABC", "a_b_c", "A_B_C"],
+		["x1y2", "x1y2", "X1y2", "x1y2", "X1Y2"],
+		["aria-label", "ariaLabel", "AriaLabel", "aria_label", "ARIA_LABEL"],
+		[
+			"XMLHttpRequest",
+			"xmlHttpRequest",
+			"XmlHttpRequest",
+			"xml_http_request",
+			"XML_HTTP_REQUEST",
+		],
+		["msg--one", "msgOne", "MsgOne", "msg_one", "MSG_ONE"],
+	];
+	const notations = ["camelCase", "pascalCase", "snakeCase", "constantCase"];
+	for (const [id, ...expected] of table) {
+		notations.forEach((variableNotation, i) => {
+			const js = compile(`${id} = v`, { locale: "en-CA", variableNotation });
+			ok(
+				js.includes(`export const ${expected[i]} = `),
+				`${id} under ${variableNotation} should export ${expected[i]}`,
+			);
+		});
+	}
+});
+
+test("Should select on the attribute of a parameterized term", async () => {
+	// A term that has both params and attributes becomes a callable record.
+	const src = `-brand =
+    { $case ->
+       *[nominative] Firefox
+        [locative] Firefoksie
+    }
+    .gender = masculine
+msg =
+    { -brand.gender ->
+        [masculine] el { -brand(case: "locative") }
+       *[feminine] la
+    }`;
+	const mod = await compileAndImport(src, { locale: "en-CA" });
+	strictEqual(mod.msg(), "el Firefoksie");
+	strictEqual(mod.msg(), createBundleHelper("en-CA", src)("msg"));
+});
+
+test("Should prefix every name that would break the generated module", () => {
+	// Each entry needs an FTL id and notation that actually produces it, so the
+	// globals are reached via the notation that yields their exact casing.
+	const keywords = [
+		"arguments",
+		"await",
+		"break",
+		"case",
+		"catch",
+		"class",
+		"const",
+		"continue",
+		"debugger",
+		"default",
+		"delete",
+		"do",
+		"else",
+		"enum",
+		"eval",
+		"export",
+		"extends",
+		"false",
+		"finally",
+		"for",
+		"function",
+		"if",
+		"implements",
+		"import",
+		"in",
+		"instanceof",
+		"interface",
+		"let",
+		"new",
+		"null",
+		"package",
+		"private",
+		"protected",
+		"public",
+		"return",
+		"static",
+		"super",
+		"switch",
+		"this",
+		"throw",
+		"true",
+		"try",
+		"typeof",
+		"undefined",
+		"var",
+		"void",
+		"while",
+		"with",
+		"yield",
+	];
+	const cases = [
+		...keywords.map((word) => [word, "camelCase", word]),
+		// globals the emitted Intl helpers reference
+		["date", "pascalCase", "Date"],
+		["intl", "pascalCase", "Intl"],
+		["json", "constantCase", "JSON"],
+		["math", "pascalCase", "Math"],
+		["number", "pascalCase", "Number"],
+		["is-na-n", "camelCase", "isNaN"],
+	];
+	for (const [id, variableNotation, expected] of cases) {
+		const js = compile(`${id} = value`, { locale: "en-CA", variableNotation });
+		ok(
+			js.includes(`export const _${expected} = `),
+			`"${id}" under ${variableNotation} should export _${expected}`,
+		);
+	}
+});
+
+test("Should use dot access for plain attribute names and brackets for dashed", () => {
+	const plain = compile("o = Hi\n    .alt = A\nm = { o.alt }", {
+		locale: "en-CA",
+	});
+	ok(plain.includes(".attributes.alt"), "plain names should use dot access");
+	const dashed = compile("o = Hi\n    .aria-label = A\nm = { o.aria-label }", {
+		locale: "en-CA",
+	});
+	ok(
+		dashed.includes('.attributes["aria-label"]'),
+		"dashed names are not valid after a dot",
+	);
+});
+
+test("Should reject a message that references itself", () => {
+	// `const msg = ${msg}` is a temporal dead zone error at import time.
+	throws(() => compile("msg = { msg }", { locale: "en-CA" }), {
+		message: /Self reference "msg"/,
+	});
+	throws(() => compile("-brand = { -brand }", { locale: "en-CA" }), {
+		message: /Self reference "brand"/,
+	});
+});
+
+test("Should keep reserved words usable as attribute names", async () => {
+	// Attribute names are object literal keys, where `default` and friends are
+	// perfectly legal, so they must not be given the identifier `_` prefix.
+	const src = `msg = v
+    .default = fallback
+    .class = c
+    .Date = d
+ref = { msg.default } { msg.class } { msg.Date }`;
+	const mod = await compileAndImport(src, { locale: "en-CA" });
+	deepStrictEqual(mod.msg.attributes, {
+		default: "fallback",
+		class: "c",
+		Date: "d",
+	});
+	strictEqual(mod.ref, "fallback c d");
+	strictEqual(mod.ref, createBundleHelper("en-CA", src)("ref"));
 });

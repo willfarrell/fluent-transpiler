@@ -1,16 +1,9 @@
 // Copyright 2026 will Farrell, and fluent-transpiler contributors.
 // SPDX-License-Identifier: MIT
 
-import { stat, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import { Command, Option } from "commander";
 import { compileFiles } from "./index.js";
-
-const fileExists = async (filepath) => {
-	const stats = await stat(filepath);
-	if (!stats.isFile()) {
-		throw new Error(`${filepath} is not a file`);
-	}
-};
 
 export const createProgram = () =>
 	new Command()
@@ -67,16 +60,18 @@ export const createProgram = () =>
 		)
 		.addOption(
 			new Option(
+				"--no-error-on-junk",
+				"Skip `Junk` instead of throwing an error.",
+			),
+		)
+		.addOption(
+			new Option(
 				"-o, --output <output>",
 				"Path to store the resulting JavaScript file. Will be in ESM.",
 			),
 		)
 		.action(async (inputs, options) => {
 			options.comments = options.comments ?? false;
-
-			for (const input of inputs) {
-				await fileExists(input);
-			}
 
 			const js = await compileFiles(inputs, options);
 			if (options.output) {
