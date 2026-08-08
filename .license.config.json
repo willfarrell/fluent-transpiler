@@ -11,7 +11,7 @@
 	"ignore": [
 		".github/**/*",
 		".husky/**/*",
-		"fixtures/*",
+		"test/files/**/*",
 		"commitlint.config.cjs",
 		"LICENSE",
 		".license.template",

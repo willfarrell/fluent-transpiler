@@ -3,50 +3,16 @@
 
 import { readFile } from "node:fs/promises";
 import { parse } from "@fluent/syntax";
-import { camelCase, constantCase, pascalCase, snakeCase } from "change-case";
 
-const collectTopLevelIds = (src) => {
-	const { body } = parse(src);
-	const ids = [];
-	for (const node of body) {
-		if (node.type === "Message" || node.type === "Term") {
-			ids.push(node.id.name);
-		}
-	}
-	return ids;
-};
-
-const checkDuplicates = (sources) => {
-	const seen = new Map();
-	const duplicates = [];
-	for (const { label, src } of sources) {
-		for (const id of collectTopLevelIds(src)) {
-			const prior = seen.get(id);
-			if (prior === undefined) {
-				seen.set(id, label);
-			} else if (prior !== label) {
-				duplicates.push({ id, a: prior, b: label });
-			}
-		}
-	}
-	if (duplicates.length) {
-		const lines = duplicates.map(
-			(d) => `  - "${d.id}" defined in ${d.a} and ${d.b}`,
-		);
-		throw new Error(`Duplicate id(s) found:\n${lines.join("\n")}`);
-	}
-};
-
+// Identifiers that would break the generated module: JavaScript reserved
+// words (a `const` declaration would not parse) plus the globals the emitted
+// runtime helpers reference (a top-level `const` would shadow them).
 const reservedWords = new Set([
-	"abstract",
 	"arguments",
 	"await",
-	"boolean",
 	"break",
-	"byte",
 	"case",
 	"catch",
-	"char",
 	"class",
 	"const",
 	"continue",
@@ -54,56 +20,49 @@ const reservedWords = new Set([
 	"default",
 	"delete",
 	"do",
-	"double",
 	"else",
 	"enum",
 	"eval",
 	"export",
 	"extends",
 	"false",
-	"final",
 	"finally",
-	"float",
 	"for",
 	"function",
-	"goto",
 	"if",
 	"implements",
 	"import",
 	"in",
 	"instanceof",
-	"int",
 	"interface",
 	"let",
-	"long",
-	"native",
 	"new",
 	"null",
-	"of",
 	"package",
 	"private",
 	"protected",
 	"public",
 	"return",
-	"short",
 	"static",
 	"super",
 	"switch",
-	"synchronized",
 	"this",
 	"throw",
-	"throws",
-	"transient",
 	"true",
 	"try",
 	"typeof",
 	"undefined",
 	"var",
 	"void",
-	"volatile",
 	"while",
 	"with",
 	"yield",
+	"Date",
+	"Intl",
+	"JSON",
+	"Math",
+	"Number",
+	"isNaN",
 ]);
 
 const exportDefault = `(id, params) => {
@@ -115,8 +74,6 @@ const exportDefault = `(id, params) => {
 `;
 export const compile = (src, opts) => {
 	if (Array.isArray(src)) {
-		const sources = src.map((s, i) => ({ label: `source[${i}]`, src: s }));
-		checkDuplicates(sources);
 		src = src.join("\n\n");
 	}
 	const options = {
@@ -150,7 +107,7 @@ export const compile = (src, opts) => {
 	const functions = {}; // global functions
 	let variable;
 
-	const compileAssignment = (data) => {
+	const compileAssignment = (data, kind) => {
 		variable = compileType(data);
 		if (metadata[variable] !== undefined) {
 			// Two declarations of one name (repeated id, term/message overlap, or
@@ -162,9 +119,54 @@ export const compile = (src, opts) => {
 		}
 		metadata[variable] = {
 			id: data.name,
+			kind,
 			params: false,
 		};
 		return variable;
+	};
+
+	// A reference resolves to the referenced entry's value. Entries carrying
+	// attributes are emitted as {value, attributes} records, and disableMinify
+	// makes every *message* such a record — terms keep their natural shape
+	// because they are never exported.
+	const compileReference = (name, attribute, args) => {
+		if (name === variable) {
+			// `const x = ${x}` is a temporal dead zone error at import time.
+			throw new Error(`Self reference "${metadata[name].id}"`);
+		}
+		const entry = metadata[name];
+		const alwaysRecord = options.disableMinify && entry.kind === "Message";
+		let base = name;
+		if (entry.params) {
+			base = `${name}(${args ?? options.params})`;
+		} else if (alwaysRecord) {
+			base = `${name}()`;
+		}
+		if (attribute) {
+			if (!entry.attributes.includes(attribute.name)) {
+				throw new Error(`Unknown attribute "${entry.id}.${attribute.name}"`);
+			}
+			// attribute keys are emitted verbatim, so dashed names need brackets
+			const key = attribute.name.includes("-")
+				? `[${JSON.stringify(attribute.name)}]`
+				: `.${attribute.name}`;
+			return `${base}.attributes${key}`;
+		}
+		return entry.attributes.length || alwaysRecord ? `${base}.value` : base;
+	};
+
+	// Records the attribute names on the entry and returns the object literal.
+	// Must run after the value is compiled: both contribute to `params`.
+	const compileAttributes = (data, assignment) => {
+		metadata[assignment].attributes = data.attributes.map((a) => a.id.name);
+		if (!metadata[assignment].attributes.length) {
+			return "{}";
+		}
+		return `{\n${data.attributes
+			.map((data) => {
+				return `  ${compileType(data)}`;
+			})
+			.join(",\n")}\n  }`;
 	};
 
 	const compileFunctionArguments = (data) => {
@@ -189,19 +191,15 @@ export const compile = (src, opts) => {
 
 	const types = {
 		Identifier: (data, parent) => {
-			const value =
-				parent === "Attribute"
-					? data.name
-					: variableNotation[options.variableNotation](data.name);
-
-			if (value.includes("-")) {
-				return `'${value}'`;
+			// Attribute names are object literal keys, never declarations: they
+			// keep their source spelling, need no reserved-word guard (`{default:
+			// 1}` is valid), and only dashes force quoting.
+			if (parent === "Attribute") {
+				return data.name.includes("-") ? `'${data.name}'` : data.name;
 			}
-			// Check for reserved words
-			if (reservedWords.has(value)) {
-				return `_${value}`;
-			}
-			return value;
+			// Every notation strips dashes, so only reserved words need handling.
+			const value = variableNotation[options.variableNotation](data.name);
+			return reservedWords.has(value) ? `_${value}` : value;
 		},
 		Attribute: (data) => {
 			const key = compileType(data.id, data.type);
@@ -228,15 +226,31 @@ export const compile = (src, opts) => {
 		},
 		// resources
 		Term: (data) => {
-			const assignment = compileAssignment(data.id);
+			const assignment = compileAssignment(data.id, data.type);
 			const templateStringLiteral = compileType(data.value, data.type);
+			const attributes = compileAttributes(data, assignment);
+
+			// A term carrying attributes becomes a {value, attributes} record so
+			// selectors can reach them; a plain term stays a bare string.
+			if (metadata[assignment].attributes.length) {
+				if (metadata[assignment].params) {
+					return `const ${assignment} = (${options.params}) => ({
+  value:${templateStringLiteral},
+  attributes:${attributes}
+})\n`;
+				}
+				return `const ${assignment} = {
+  value: ${templateStringLiteral},
+  attributes: ${attributes}
+}\n`;
+			}
 			if (metadata[assignment].params) {
 				return `const ${assignment} = (${options.params}) => ${templateStringLiteral}\n`;
 			}
 			return `const ${assignment} = ${templateStringLiteral}\n`;
 		},
 		Message: (data) => {
-			const assignment = compileAssignment(data.id);
+			const assignment = compileAssignment(data.id, data.type);
 
 			let templateStringLiteral =
 				data.value && compileType(data.value, data.type);
@@ -245,19 +259,11 @@ export const compile = (src, opts) => {
 				templateStringLiteral = "``";
 			}
 
-			metadata[assignment].attributes = data.attributes.length;
-			let attributes = "{}";
-			if (metadata[assignment].attributes) {
-				attributes = `{\n${data.attributes
-					.map((data) => {
-						return `  ${compileType(data)}`;
-					})
-					.join(",\n")}\n  }`;
-			}
+			const attributes = compileAttributes(data, assignment);
 
 			let message;
 			if (!options.disableMinify) {
-				if (metadata[assignment].attributes) {
+				if (metadata[assignment].attributes.length) {
 					if (metadata[assignment].params) {
 						message = `(${options.params}) => ({
   value:${templateStringLiteral},
@@ -333,11 +339,15 @@ export const compile = (src, opts) => {
 		},
 		// Expression
 		StringLiteral: (data, parent) => {
+			// `value` is the raw source between the quotes; `parse()` resolves
+			// Fluent's escapes. They are not all JavaScript escapes — `\UXXXXXX`
+			// would otherwise reach the JS parser and degrade to `UXXXXXX`.
+			const { value } = data.parse();
 			// JSON.stringify at parent level
-			if (["NamedArgument"].includes(parent)) {
-				return `${data.value}`;
+			if (parent === "NamedArgument") {
+				return value;
 			}
-			return `"${data.value}"`;
+			return JSON.stringify(value);
 		},
 		NumberLiteral: (data, parent) => {
 			const number = Number.parseFloat(data.value);
@@ -370,15 +380,7 @@ export const compile = (src, opts) => {
 				);
 			}
 			metadata[variable].params ||= metadata[messageName].params;
-			if (!options.disableMinify) {
-				if (metadata[messageName].params) {
-					return `${messageName}(${options.params})`;
-				}
-				return `${messageName}`;
-			}
-			return `${messageName}(${
-				metadata[messageName].params ? options.params : ""
-			})`;
+			return compileReference(messageName, data.attribute);
 		},
 		TermReference: (data) => {
 			const termName = compileType(data.id);
@@ -389,33 +391,20 @@ export const compile = (src, opts) => {
 			}
 			metadata[variable].params ||= metadata[termName].params;
 
-			let params;
-			if (metadata[termName].params) {
-				let { named } = compileFunctionArguments(data);
-				named = JSON.stringify(named);
-				if (named) {
-					params = `{ ...${options.params}, ${named.substring(
-						1,
-						named.length - 1,
-					)} }`;
-				} else {
-					params = options.params;
-				}
-			}
-			if (!options.disableMinify) {
-				if (metadata[termName].params) {
-					return `${termName}(${params})`;
-				}
-				return `${termName}`;
-			}
-			return `${termName}(${params ? params : ""})`;
+			let { named } = compileFunctionArguments(data);
+			named = JSON.stringify(named);
+			// named arguments override the caller's params for this term only
+			const params = named
+				? `{ ...${options.params}, ${named.substring(1, named.length - 1)} }`
+				: undefined;
+			return compileReference(termName, data.attribute, params);
 		},
 		SelectExpression: (data) => {
 			functions.__select = true;
 			metadata[variable].params = true;
 			const value = compileType(data.selector);
 			let fallback;
-			return `__select(\n    ${value},\n    {\n${data.variants
+			const cases = data.variants
 				.filter((data) => {
 					if (data.default) {
 						fallback = compileType(data.value, data.type);
@@ -424,8 +413,11 @@ export const compile = (src, opts) => {
 				})
 				.map((data) => {
 					return `  ${compileType(data)}`;
-				})
-				.join(",\n")}\n    },\n    ${fallback}\n  )`;
+				});
+			// `__proto__: null` keeps a hostile selector value (`constructor`,
+			// `toString`, ...) from resolving up the prototype chain instead of
+			// falling back to the default variant.
+			return `__select(\n    ${value},\n    {\n${["      __proto__: null", ...cases].join(",\n")}\n    },\n    ${fallback}\n  )`;
 		},
 		Variant: (data) => {
 			// Variant keys are runtime match keys (plural categories, selector
@@ -470,7 +462,9 @@ export const compile = (src, opts) => {
 		},
 	};
 
-	src = src.replace(/\t/g, "    ");
+	// Fluent does not accept tabs as indentation. Normalize leading tabs only —
+	// a tab inside a message value is content and must survive.
+	src = src.replaceAll(/^\t+/gm, (tabs) => "    ".repeat(tabs.length));
 
 	const { body } = parse(src);
 	let translations = ``;
@@ -572,28 +566,76 @@ const __select = (value, cases, fallback) => {
 `;
 	}
 	output += `\n${translations}`;
-	output += `const __exports = {\n  ${exports.join(",\n  ")}\n}`;
+	// `__proto__: null` keeps a lookup for an inherited name (`constructor`,
+	// `toString`, ...) reporting an unknown id instead of returning — or
+	// calling — something off Object.prototype.
+	output += `const __exports = {\n  ${["__proto__: null", ...exports].join(",\n  ")}\n}`;
 	output += `\nexport default ${options.exportDefault}`;
 
 	return output;
 };
 
+// Word splitting, matching change-case (which this replaced): break on
+// lower/digit -> upper, on the tail of an acronym run (`HTTPServer` -> HTTP,
+// Server), and on any run of non-alphanumerics. The notation table in
+// index.test.js pins every rule below.
+const SPLIT_LOWER_UPPER = /([\p{Ll}\d])(\p{Lu})/gu;
+const SPLIT_UPPER_UPPER = /(\p{Lu})([\p{Lu}][\p{Ll}])/gu;
+const SPLIT_NON_WORD = /[^\p{L}\d]/giu;
+
+const splitWords = (value) =>
+	value
+		.replace(SPLIT_LOWER_UPPER, "$1\0$2")
+		.replace(SPLIT_UPPER_UPPER, "$1\0$2")
+		.replace(SPLIT_NON_WORD, "\0")
+		.split("\0")
+		.filter(Boolean);
+
+const STARTS_WITH_DIGIT = /^\d/;
+
+const capitalize = (word, index) => {
+	// A digit cannot be uppercased, so it is delimited instead: `msg-2` would
+	// otherwise collapse to an ambiguous `msg2`.
+	// Stryker disable next-line ConditionalExpression,EqualityOperator: equivalent
+	// mutant — a Fluent id must start with a letter, so the first word never
+	// starts with a digit and the index guard cannot be observed.
+	const delimit = index > 0 && STARTS_WITH_DIGIT.test(word);
+	const initial = delimit ? `_${word[0]}` : word[0].toLocaleUpperCase();
+	return initial + word.slice(1).toLocaleLowerCase();
+};
+
 const variableNotation = {
-	camelCase,
-	pascalCase,
-	snakeCase,
-	constantCase,
+	camelCase: (id) =>
+		splitWords(id)
+			.map((word, index) =>
+				index === 0 ? word.toLocaleLowerCase() : capitalize(word, index),
+			)
+			.join(""),
+	pascalCase: (id) => splitWords(id).map(capitalize).join(""),
+	snakeCase: (id) =>
+		splitWords(id)
+			.map((word) => word.toLocaleLowerCase())
+			.join("_"),
+	constantCase: (id) =>
+		splitWords(id)
+			.map((word) => word.toLocaleUpperCase())
+			.join("_"),
 };
 
 export const compileFiles = async (paths, opts) => {
 	const sources = await Promise.all(
-		paths.map(async (path) => ({
-			label: path,
-			src: await readFile(path, { encoding: "utf8" }),
-		})),
+		paths.map((path) =>
+			// Node's EISDIR carries no path, so name it here or a failing input
+			// is unidentifiable among several.
+			// Stryker disable next-line ObjectLiteral,StringLiteral: equivalent
+			// mutant — the sources are joined into a string, and Buffer#toString
+			// already defaults to utf8, so dropping the encoding changes nothing.
+			readFile(path, { encoding: "utf8" }).catch((e) => {
+				throw new Error(`${path}: ${e.message}`, { cause: e });
+			}),
+		),
 	);
-	checkDuplicates(sources);
-	return compile(sources.map((s) => s.src).join("\n\n"), opts);
+	return compile(sources.join("\n\n"), opts);
 };
 
 export default compile;

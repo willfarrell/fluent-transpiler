@@ -3,7 +3,7 @@
 		".github"
 	],
 	"name": "fluent-transpiler",
-	"version": "0.6.0",
+	"version": "0.7.0",
 	"description": "Transpile Fluent (ftl) files into optimized, tree-shakable, JavaScript EcmaScript Modules (esm).",
 	"main": "index.js",
 	"types": "index.d.ts",
@@ -32,12 +32,12 @@
 		"prepare": "husky",
 		"git:pre-commit": "npm run git:lint-staged && npm run git:test-staged",
 		"git:commit-msg": "commitlint --config commitlint.config.cjs --edit",
-		"git:lint-staged": "npm run test:lint",
+		"git:lint-staged": "biome check --staged --no-errors-on-unmatched",
 		"git:unit-staged": "node --test",
 		"git:test-staged": "npm run git:unit-staged",
 		"lint": "biome check --write --no-errors-on-unmatched",
 		"test": "npm run test:lint && npm run test:unit && npm run test:mutation && npm run test:types && npm run test:sast && npm run test:perf && npm run test:dast",
-		"test:lint": "biome check --staged --no-errors-on-unmatched",
+		"test:lint": "biome ci --no-errors-on-unmatched",
 		"test:unit": "node --test --test-force-exit --experimental-test-coverage --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 ./**/*.test.js",
 		"test:mutation": "stryker run",
 		"test:types": "tstyche",
@@ -52,7 +52,7 @@
 		"test:sast:semgrep": "semgrep scan --config auto --error",
 		"test:sast:trivy": "trivy fs --scanners vuln,license --include-dev-deps --ignored-licenses 0BSD,Apache-2.0,BSD-1-Clause,BSD-2-Clause,BSD-3-Clause,CC0-1.0,CC-BY-4.0,ISC,MIT,Python-2.0,LGPL-3.0-or-later,MPL-2.0,BlueOak-1.0.0,Unlicense --exit-code 1 --skip-files '**/bun.lock' --disable-telemetry .",
 		"test:sast:trufflehog": "trufflehog filesystem --only-verified --log-level=-1 ./",
-		"test:sast:zizmor": "zizmor .github/workflows/",
+		"test:sast:zizmor": "zizmor .github",
 		"test:dast": "npm run test:dast:fuzz",
 		"test:dast:fuzz": "node --test ./**/*.fuzz.js",
 		"rm": "npm run rm:macos && npm run rm:node_modules && npm run rm:lock",
@@ -86,23 +86,24 @@
 	"homepage": "https://github.com/willfarrell/fluent-transpiler",
 	"dependencies": {
 		"@fluent/syntax": "0.19.0",
-		"change-case": "5.4.4",
 		"commander": "15.0.0"
 	},
 	"overrides": {
-		"qs": "^6.15.2"
+		"js-yaml": ">=4.2.0",
+		"qs": "^6.15.2",
+		"typescript": "^5.9.3"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.0.0",
-		"@commitlint/cli": "^21.0.0",
-		"@commitlint/config-conventional": "^21.0.0",
-		"@fluent/bundle": "^0.19.0",
-		"@stryker-mutator/core": "^9.0.0",
-		"fast-check": "^4.0.0",
-		"husky": "^9.0.0",
+		"@biomejs/biome": "^2.5.3",
+		"@commitlint/cli": "^21.2.1",
+		"@commitlint/config-conventional": "^21.2.0",
+		"@fluent/bundle": "^0.19.1",
+		"@stryker-mutator/core": "^9.6.1",
+		"fast-check": "^4.9.0",
+		"husky": "^9.1.7",
 		"license-check-and-add": "4.0.5",
-		"tinybench": "^6.0.0",
-		"tstyche": "^7.0.0"
+		"tinybench": "^6.0.2",
+		"tstyche": "^7.2.1"
 	},
 	"funding": {
 		"type": "github",

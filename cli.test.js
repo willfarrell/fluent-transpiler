@@ -128,8 +128,8 @@ test("Should error for non-existent input file", async () => {
 test("Should error when input path is a directory", async () => {
 	await rejects(
 		run([testDir, "--locale", "en-CA"]),
-		/is not a file/,
-		"should indicate the path is not a file",
+		/EISDIR/,
+		"should report the unreadable input",
 	);
 });
 
@@ -150,7 +150,7 @@ test("Should compile multiple files joined in order", async () => {
 	ok(out.includes("export const appGreeting"));
 });
 
-test("Should error with file paths on duplicate ids across files", async () => {
+test("Should error on duplicate ids across files", async () => {
 	await rejects(
 		run([
 			join(testDir, "files", "joined", "dup-a.ftl"),
@@ -160,8 +160,6 @@ test("Should error with file paths on duplicate ids across files", async () => {
 		]),
 		(e) => {
 			ok(e.message.includes('"greeting"'));
-			ok(e.message.includes("dup-a.ftl"));
-			ok(e.message.includes("dup-b.ftl"));
 			return true;
 		},
 	);
@@ -284,6 +282,39 @@ test("Should wrap placeables with isolating chars with --use-isolating", async (
 	}
 });
 
+// === Options: --no-error-on-junk ===
+
+test("Should error on junk input by default", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "ftl-cli-test-"));
+	const inputPath = join(dir, "input.ftl");
+	try {
+		await writeFile(inputPath, "-brand-name = {}\n", "utf8");
+		await rejects(
+			run([inputPath, "--locale", "en-CA"]),
+			/Junk found/,
+			"junk should be a hard failure without the flag",
+		);
+	} finally {
+		await rm(dir, { recursive: true });
+	}
+});
+
+test("Should skip junk input with --no-error-on-junk", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "ftl-cli-test-"));
+	const inputPath = join(dir, "input.ftl");
+	try {
+		await writeFile(inputPath, "-brand-name = {}\nmsg = Hello\n", "utf8");
+		const out = await captureLog(() =>
+			run([inputPath, "--locale", "en-CA", "--no-error-on-junk"]),
+		);
+		ok(out.includes("export const msg"), "should emit the valid message");
+		ok(out.includes("export default"), "should emit a complete module");
+		ok(!out.includes("brandName"), "junk entry should be skipped");
+	} finally {
+		await rm(dir, { recursive: true });
+	}
+});
+
 // === variable-notation choices are all accepted ===
 
 for (const notation of [
@@ -325,5 +356,6 @@ test("Should describe the program and every option in --help", () => {
 	ok(help.includes("What variable notation to use with exports"));
 	ok(help.includes("all exported messages will have the same interface"));
 	ok(help.includes("Wrap placeable with"));
+	ok(help.includes("Skip `Junk` instead of throwing an error."));
 	ok(help.includes("Path to store the resulting JavaScript file"));
 });
