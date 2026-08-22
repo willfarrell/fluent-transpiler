@@ -31,8 +31,19 @@ jobs:
       - name: Harden runner
         uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450 # v2.19.1
         with:
-          egress-policy: audit
+          egress-policy: block
+          disable-sudo: true
           disable-telemetry: true
+          allowed-endpoints: >
+            api.github.com:443
+            fulcio.sigstore.dev:443
+            github.com:443
+            nodejs.org:443
+            objects.githubusercontent.com:443
+            registry.npmjs.org:443
+            rekor.sigstore.dev:443
+            release-assets.githubusercontent.com:443
+            tuf-repo-cdn.sigstore.dev:443
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -42,6 +53,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: https://registry.npmjs.org
+          package-manager-cache: false # release artifacts must never touch the shared Actions cache
       - name: Set env
         run: |
           tag=$(npm pkg get version | xargs)
@@ -91,13 +103,13 @@ jobs:
       - name: Harden runner
         uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450 # v2.19.1
         with:
-          egress-policy: audit
+          egress-policy: block
+          disable-sudo: true
           disable-telemetry: true
-      - name: Setup Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0 # zizmor: ignore[cache-poisoning] no cache configured (no `cache:` input); reconsider if caching is added
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          registry-url: https://registry.npmjs.org
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            uploads.github.com:443
       - name: Download artifact
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
@@ -119,6 +131,8 @@ jobs:
     needs: release
     runs-on: ubuntu-latest
 
+    environment: npm-publish
+
     permissions:
       contents: read
       id-token: write # npm publish
@@ -127,13 +141,23 @@ jobs:
       - name: Harden runner
         uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450 # v2.19.1
         with:
-          egress-policy: audit
+          egress-policy: block
+          disable-sudo: true
           disable-telemetry: true
+          allowed-endpoints: >
+            registry.npmjs.org:443
+            fulcio.sigstore.dev:443
+            rekor.sigstore.dev:443
+            tuf-repo-cdn.sigstore.dev:443
+            github.com:443
+            api.github.com:443
+            tmaproduction.blob.core.windows.net:443
       - name: Setup Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: https://registry.npmjs.org
+          package-manager-cache: false # release artifacts must never touch the shared Actions cache
       - name: Download artifact
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
@@ -143,11 +167,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           find . -name '*.tgz' -print -exec gh attestation verify {} --repo ${{ github.repository }} \;
-      - name: npm publish (next)
+      - name: npm stage publish (next)
         if: ${{ needs.release.outputs.prerelease == 'true' }}
         run: |
-          find . -name '*.tgz' -exec npm publish --tag next --provenance --access public {} \;
-      - name: npm publish (latest)
+          find . -name '*.tgz' -exec npm stage publish --tag next --provenance --access public {} \;
+      - name: npm stage publish (latest)
         if: ${{ needs.release.outputs.prerelease == 'false' }}
         run: |
-          find . -name '*.tgz' -exec npm publish --tag latest --provenance --access public {} \;
+          find . -name '*.tgz' -exec npm stage publish --tag latest --provenance --access public {} \;
