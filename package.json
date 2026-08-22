@@ -60,7 +60,9 @@
 		"rm:lock": "find . -name 'package-lock.json' -type f -delete",
 		"rm:node_modules": "find . -name 'node_modules' -type d -prune -exec rm -rf '{}' +",
 		"release:license:add": "license-check-and-add add -f .license.config.json",
-		"release:license:remove": "license-check-and-add remove -f .license.config.json"
+		"release:license:remove": "license-check-and-add remove -f .license.config.json",
+		"release:tag": "git tag $npm_package_version",
+		"release:approve": "npm stage list $(npm pkg get name | tr -d '\"') --json | jq -r --arg v \"$npm_package_version\" '.[] | select(.version == $v) | .id' | xargs -n1 -o npm stage approve"
 	},
 	"repository": {
 		"type": "git",
@@ -108,5 +110,6 @@
 	"funding": {
 		"type": "github",
 		"url": "https://github.com/sponsors/willfarrell"
-	}
+	},
+	"packageManager": "npm@12.0.1+sha512.L5T9i/YAQWQQWqTS/xZxJkei/9zcu99hCeE4qi41IyBVV7mRQad3qc2JfuOktwmH+qwGI/V2rbCL+/UYxb1+RQA=="
 }

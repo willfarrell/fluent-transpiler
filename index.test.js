@@ -168,6 +168,59 @@ test("Should explain when a term is referenced before its definition", () => {
 	});
 });
 
+// === HTML escaping ===
+
+test("Should escape variables in a message carrying markup", async () => {
+	const mod = await compileAndImport("msg = <code>{ $value }</code>\n", {
+		locale: "en-CA",
+	});
+	strictEqual(
+		mod.default("msg", { value: "<script>alert(1)</script>" }),
+		"<code>&lt;script&gt;alert(1)&lt;/script&gt;</code>",
+	);
+});
+
+test("Should escape variables in a message referencing a markup term", async () => {
+	const mod = await compileAndImport(
+		'-abbr = <abbr title="Cascading Style Sheets">CSS</abbr>\nmsg = { -abbr } { $value }\n',
+		{ locale: "en-CA" },
+	);
+	strictEqual(
+		mod.default("msg", { value: "a & b" }),
+		'<abbr title="Cascading Style Sheets">CSS</abbr> a &amp; b',
+	);
+});
+
+test("Should leave variables verbatim in a plain-text message", async () => {
+	const mod = await compileAndImport("msg = value { $value }\n", {
+		locale: "en-CA",
+	});
+	strictEqual(
+		mod.default("msg", { value: "a & b <c>" }),
+		"value a & b <c>",
+	);
+});
+
+test("Should not escape a variable whose name ends in Html", async () => {
+	const mod = await compileAndImport("msg = <p>{ $valueHtml }</p>\n", {
+		locale: "en-CA",
+	});
+	strictEqual(
+		mod.default("msg", { valueHtml: "<code>x</code>" }),
+		"<p><code>x</code></p>",
+	);
+});
+
+test("Should escape a variable inside a markup attribute", async () => {
+	const mod = await compileAndImport('msg = <a href="{ $href }">go</a>\n', {
+		locale: "en-CA",
+	});
+	strictEqual(
+		mod.default("msg", { href: '" onmouseover="alert(1)' }),
+		'<a href="&quot; onmouseover=&quot;alert(1)">go</a>',
+	);
+});
+
 // === Comments ===
 
 test("Should include comments when comments:true", () => {
