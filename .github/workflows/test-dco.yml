@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450 # v2.19.1
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
         with:
           egress-policy: block
           disable-sudo: true
@@ -25,4 +25,4 @@ jobs:
             api.github.com:443
             github.com:443
       - name: Check for Developer Certificate of Origin (DCO) compliance
-        uses: KineticCafe/actions-dco@6e1652ef3027ce128e65e6edd215ae053350bd16 # v2.1.1
+        uses: KineticCafe/actions-dco@5f160e3ee086af8fc0fb567b8add0937d074123e # v3.2.0
