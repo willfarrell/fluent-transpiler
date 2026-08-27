@@ -195,10 +195,7 @@ test("Should leave variables verbatim in a plain-text message", async () => {
 	const mod = await compileAndImport("msg = value { $value }\n", {
 		locale: "en-CA",
 	});
-	strictEqual(
-		mod.default("msg", { value: "a & b <c>" }),
-		"value a & b <c>",
-	);
+	strictEqual(mod.default("msg", { value: "a & b <c>" }), "value a & b <c>");
 });
 
 test("Should not escape a variable whose name ends in Html", async () => {
