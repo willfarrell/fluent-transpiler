@@ -150,6 +150,21 @@ const hazardText = fc
 	})
 	.filter(({ expected }) => expected.length > 0);
 
+// Mirrors the compiler: markup in any of a message's text elements turns on
+// HTML escaping for its variables. A string literal placeable ends the text
+// element it sits in, so the elements are the brace-free segments.
+const markup = /<[a-z!/][^>]*>/i;
+const hasMarkup = (...texts) =>
+	texts.some((text) => text.split(/[{}]/).some((part) => markup.test(part)));
+const escapeChar = {
+	"&": "&amp;",
+	"<": "&lt;",
+	">": "&gt;",
+	'"': "&quot;",
+	"'": "&#39;",
+};
+const escapeHtml = (value) => value.replace(/[&<>"']/g, (c) => escapeChar[c]);
+
 // Property keys that resolve up Object.prototype: a lookup that reaches them
 // hands back an inherited function or object instead of a translation.
 const hostileKeys = [
@@ -490,10 +505,15 @@ test("fuzz: hazardous text renders back exactly as written", async () => {
 				const mod = await assertCompiles(src, { locale: loc }, params);
 				const rendered = mod.default(id, params);
 				// what goes into the FTL text is what comes out of the message, no
-				// matter how it reads to a template literal
+				// matter how it reads to a template literal; the variable is the
+				// one part markup in the message escapes
+				const escaped =
+					hasMarkup(value.expected, attrValue.expected) &&
+					!varName.endsWith("Html");
+				const rendersAs = escaped ? escapeHtml(variable) : variable;
 				deepStrictEqual(
 					rendered.value,
-					`${value.expected} ${variable} ${value.expected}`,
+					`${value.expected} ${rendersAs} ${value.expected}`,
 				);
 				deepStrictEqual(rendered.attributes[attrName], attrValue.expected);
 			},

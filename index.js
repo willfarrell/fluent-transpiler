@@ -189,6 +189,17 @@ export const compile = (src, opts) => {
 		}
 	};
 
+	const markup = /<[a-z!/][^>]*>/i;
+	const hasMarkup = (data) => {
+		if (Array.isArray(data)) return data.some(hasMarkup);
+		if (!data || typeof data !== "object") return false;
+		if (data.type === "TextElement") return markup.test(data.value);
+		if (data.type === "MessageReference" || data.type === "TermReference") {
+			return metadata[compileType(data.id)]?.html === true;
+		}
+		return Object.values(data).some(hasMarkup);
+	};
+
 	const types = {
 		Identifier: (data, parent) => {
 			// Attribute names are object literal keys, never declarations: they
@@ -227,6 +238,7 @@ export const compile = (src, opts) => {
 		// resources
 		Term: (data) => {
 			const assignment = compileAssignment(data.id, data.type);
+			metadata[assignment].html = hasMarkup(data);
 			const templateStringLiteral = compileType(data.value, data.type);
 			const attributes = compileAttributes(data, assignment);
 
@@ -251,6 +263,7 @@ export const compile = (src, opts) => {
 		},
 		Message: (data) => {
 			const assignment = compileAssignment(data.id, data.type);
+			metadata[assignment].html = hasMarkup(data);
 
 			let templateStringLiteral =
 				data.value && compileType(data.value, data.type);
@@ -368,7 +381,14 @@ export const compile = (src, opts) => {
 				? `${options.params}?.[${JSON.stringify(data.id.name)}]`
 				: `${options.params}?.${data.id.name}`;
 			if (["Message", "Variant", "Attribute"].includes(parent)) {
-				return `__formatVariable(${value}, ${JSON.stringify(data.id.name)})`;
+				const formatted = `__formatVariable(${value}, ${JSON.stringify(data.id.name)})`;
+				// An `Html` suffix is the caller's declaration that the value is
+				// already safe markup; every other variable is escaped as text.
+				if (metadata[variable].html && !data.id.name.endsWith("Html")) {
+					functions.__escapeHtml = true;
+					return `__escapeHtml(${formatted})`;
+				}
+				return formatted;
 			}
 			return value;
 		},
@@ -555,6 +575,12 @@ const __formatVariable = (value, name) => {
   const number = Number.isInteger(decimal) ? Number.parseInt(value, 10) : decimal
   return __formatNumber(number)
 }
+`;
+	}
+	if (functions.__escapeHtml) {
+		output += `
+const __escapeChar = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
+const __escapeHtml = (value) => value.replace(/[&<>"']/g, (c) => __escapeChar[c])
 `;
 	}
 	if (functions.__select) {
