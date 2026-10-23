@@ -16,7 +16,7 @@
 		}
 	},
 	"engines": {
-		"node": ">=24"
+		"node": ">=26"
 	},
 	"engineStrict": true,
 	"bin": {
@@ -36,21 +36,21 @@
 		"git:unit-staged": "node --test",
 		"git:test-staged": "npm run git:unit-staged",
 		"lint": "biome check --write --no-errors-on-unmatched",
-		"test": "npm run test:lint && npm run test:unit && npm run test:mutation && npm run test:types && npm run test:sast && npm run test:perf && npm run test:dast",
+		"test": "npm run test:lint && npm run test:unit && npm run test:mutation && npm run test:types && npm run test:sast && npm run test:bench && npm run test:dast",
 		"test:lint": "biome ci --no-errors-on-unmatched",
 		"test:unit": "node --test --test-force-exit --experimental-test-coverage --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 ./**/*.test.js",
 		"test:mutation": "stryker run",
 		"test:types": "tstyche",
-		"test:perf": "node --test --test-concurrency=1 ./**/*.perf.js",
+		"test:bench": "node --experimental-bench --bench './**/*.bench.js'",
 		"test:sast": "npm run test:sast:license && npm run test:sast:lockfile && npm run test:sast:semgrep && npm run test:sast:trufflehog && npm run test:sast:gitleaks && npm run test:sast:actionlint && npm run test:sast:zizmor && npm run test:sast:trivy",
 		"test:sast:actionlint": "actionlint",
 		"test:sast:gitleaks": "npm run test:sast:gitleaks:dir && npm run test:sast:gitleaks:git",
 		"test:sast:gitleaks:dir": "gitleaks dir . --redact --no-banner",
 		"test:sast:gitleaks:git": "gitleaks git . --redact --no-banner",
-		"test:sast:license": "license-check-and-add check -f .license.config.json",
+		"test:sast:license": "node .github/license.mjs check",
 		"test:sast:lockfile": "lockfile-lint --path package-lock.json --type npm --allowed-schemes \"https:\" --allowed-hosts npm --validate-integrity --validate-package-names",
 		"test:sast:semgrep": "semgrep scan --config auto --error",
-		"test:sast:trivy": "trivy fs --scanners vuln,license --include-dev-deps --ignored-licenses 0BSD,Apache-2.0,BSD-1-Clause,BSD-2-Clause,BSD-3-Clause,CC0-1.0,CC-BY-4.0,ISC,MIT,Python-2.0,LGPL-3.0-or-later,MPL-2.0,BlueOak-1.0.0,Unlicense --exit-code 1 --skip-files '**/bun.lock' --disable-telemetry .",
+		"test:sast:trivy": "trivy fs --scanners vuln --include-dev-deps --exit-code 1 --skip-files '**/bun.lock' --disable-telemetry . && trivy fs --config .github/trivy.yml --include-dev-deps --skip-files '**/bun.lock' --disable-telemetry .",
 		"test:sast:trufflehog": "trufflehog filesystem --only-verified --log-level=-1 ./",
 		"test:sast:zizmor": "zizmor .github",
 		"test:dast": "npm run test:dast:fuzz",
@@ -59,9 +59,9 @@
 		"rm:macos": "find . -name '.DS_Store' -type f -delete",
 		"rm:lock": "find . -name 'package-lock.json' -type f -delete",
 		"rm:node_modules": "find . -name 'node_modules' -type d -prune -exec rm -rf '{}' +",
-		"release:license:add": "license-check-and-add add -f .license.config.json",
-		"release:license:remove": "license-check-and-add remove -f .license.config.json",
-		"release:tag": "git tag $npm_package_version",
+		"release:license:add": "node .github/license.mjs add",
+		"release:license:remove": "node .github/license.mjs remove",
+		"release:tag": "git tag -s -m $npm_package_version $npm_package_version",
 		"release:staged": "npm whoami >/dev/null && npm stage list $(npm pkg get name | tr -d '\"') --json | jq -r '.[] | \"\\(.packageName)@\\(.version) \\(.actor) \\(.shasum)\"'",
 		"release:approve": "npm stage list $(npm pkg get name | tr -d '\"') --json | jq -r --arg v \"$npm_package_version\" '.[] | select(.version == $v) | .id' | xargs -n1 -o npm stage approve"
 	},
@@ -104,8 +104,6 @@
 		"@stryker-mutator/core": "^9.6.1",
 		"fast-check": "^4.9.0",
 		"husky": "^9.1.7",
-		"license-check-and-add": "4.0.5",
-		"tinybench": "^6.0.2",
 		"tstyche": "^7.2.1"
 	},
 	"funding": {
