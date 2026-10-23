@@ -191,6 +191,22 @@ test("Should escape variables in a message referencing a markup term", async () 
 	);
 });
 
+test("Should escape variables in a message referencing a markup message", async () => {
+	const mod = await compileAndImport(
+		"bold = <b>x</b>\nmsg = { bold } { $value }\n",
+		{ locale: "en-CA" },
+	);
+	strictEqual(mod.default("msg", { value: "a & b" }), "<b>x</b> a &amp; b");
+});
+
+test("Should leave variables verbatim in a message referencing plain text", async () => {
+	const mod = await compileAndImport(
+		"-brand = Acme\nmsg = { -brand } { $value }\n",
+		{ locale: "en-CA" },
+	);
+	strictEqual(mod.default("msg", { value: "a & b" }), "Acme a & b");
+});
+
 test("Should leave variables verbatim in a plain-text message", async () => {
 	const mod = await compileAndImport("msg = value { $value }\n", {
 		locale: "en-CA",
@@ -1375,6 +1391,7 @@ test("Should not emit any Intl helpers or __locales for a plain message", () => 
 	ok(!js.includes("const __formatNumber"), "no Number helper");
 	ok(!js.includes("const __formatVariable"), "no Variable helper");
 	ok(!js.includes("const __select"), "no select helper");
+	ok(!js.includes("const __escapeHtml"), "no escapeHtml helper");
 });
 
 test("Should emit __formatNumber helper when only a variable is used (no NUMBER)", () => {
