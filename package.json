@@ -3,7 +3,7 @@
 		".github"
 	],
 	"name": "fluent-transpiler",
-	"version": "0.8.0",
+	"version": "0.8.1",
 	"description": "Transpile Fluent (ftl) files into optimized, tree-shakable, JavaScript EcmaScript Modules (esm).",
 	"main": "index.js",
 	"types": "index.d.ts",
@@ -93,18 +93,18 @@
 	},
 	"overrides": {
 		"js-yaml": ">=4.2.0",
-		"qs": "^6.15.2",
+		"qs": "^6.16.0",
 		"typescript": "^5.9.3"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.5.3",
-		"@commitlint/cli": "^21.2.1",
-		"@commitlint/config-conventional": "^21.2.0",
+		"@biomejs/biome": "^2.5.15",
+		"@commitlint/cli": "^21.2.3",
+		"@commitlint/config-conventional": "^21.2.3",
 		"@fluent/bundle": "^0.19.1",
-		"@stryker-mutator/core": "^9.6.1",
-		"fast-check": "^4.9.0",
+		"@stryker-mutator/core": "^10.0.0",
+		"fast-check": "^4.10.2",
 		"husky": "^9.1.7",
-		"tstyche": "^7.2.1"
+		"tstyche": "^7.2.5"
 	},
 	"funding": {
 		"type": "github",
