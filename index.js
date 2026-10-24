@@ -191,7 +191,6 @@ export const compile = (src, opts) => {
 
 	const markup = /<[a-z!/][^>]*>/i;
 	const hasMarkup = (data) => {
-		if (Array.isArray(data)) return data.some(hasMarkup);
 		if (!data || typeof data !== "object") return false;
 		if (data.type === "TextElement") return markup.test(data.value);
 		if (data.type === "MessageReference" || data.type === "TermReference") {
