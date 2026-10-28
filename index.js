@@ -65,6 +65,10 @@ const reservedWords = new Set([
 	"isNaN",
 ]);
 
+// Parents whose child is emitted into pattern text rather than an argument,
+// selector, or variant key.
+const patternParents = ["Message", "Term", "Variant", "Attribute"];
+
 const exportDefault = `(id, params) => {
   const source = __exports[id]
   if (typeof source === 'undefined') return '*** '+id+' ***'
@@ -106,6 +110,8 @@ export const compile = (src, opts) => {
 	const exports = [];
 	const functions = {}; // global functions
 	let variable;
+	// whether the pattern being compiled (a value or one attribute) carries markup
+	let html;
 
 	const compileAssignment = (data, kind) => {
 		variable = compileType(data);
@@ -142,6 +148,8 @@ export const compile = (src, opts) => {
 		} else if (alwaysRecord) {
 			base = `${name}()`;
 		}
+		let value =
+			entry.attributes.length || alwaysRecord ? `${base}.value` : base;
 		if (attribute) {
 			if (!entry.attributes.includes(attribute.name)) {
 				throw new Error(`Unknown attribute "${entry.id}.${attribute.name}"`);
@@ -150,15 +158,23 @@ export const compile = (src, opts) => {
 			const key = attribute.name.includes("-")
 				? `[${JSON.stringify(attribute.name)}]`
 				: `.${attribute.name}`;
-			return `${base}.attributes${key}`;
+			value = `${base}.attributes${key}`;
 		}
-		return entry.attributes.length || alwaysRecord ? `${base}.value` : base;
+		// plain text embedded in markup is text, so it is escaped like a variable
+		if (html && !isHtml(entry, attribute)) {
+			functions.__escapeHtml = true;
+			return `__escapeHtml(${value})`;
+		}
+		return value;
 	};
 
 	// Records the attribute names on the entry and returns the object literal.
 	// Must run after the value is compiled: both contribute to `params`.
 	const compileAttributes = (data, assignment) => {
 		metadata[assignment].attributes = data.attributes.map((a) => a.id.name);
+		metadata[assignment].htmlAttributes = data.attributes
+			.filter((a) => hasMarkup(a.value))
+			.map((a) => a.id.name);
 		if (!metadata[assignment].attributes.length) {
 			return "{}";
 		}
@@ -190,11 +206,17 @@ export const compile = (src, opts) => {
 	};
 
 	const markup = /<[a-z!/][^>]*>/i;
+	const isHtml = (entry, attribute) =>
+		attribute
+			? entry?.htmlAttributes?.includes(attribute.name) === true
+			: entry?.html === true;
 	const hasMarkup = (data) => {
 		if (!data || typeof data !== "object") return false;
 		if (data.type === "TextElement") return markup.test(data.value);
+		// an Html-suffixed variable is declared markup, so its pattern is too
+		if (data.type === "VariableReference") return data.id.name.endsWith("Html");
 		if (data.type === "MessageReference" || data.type === "TermReference") {
-			return metadata[compileType(data.id)]?.html === true;
+			return isHtml(metadata[compileType(data.id)], data.attribute);
 		}
 		return Object.values(data).some(hasMarkup);
 	};
@@ -212,6 +234,7 @@ export const compile = (src, opts) => {
 			return reservedWords.has(value) ? `_${value}` : value;
 		},
 		Attribute: (data) => {
+			html = hasMarkup(data.value);
 			const key = compileType(data.id, data.type);
 			const value = compileType(data.value, data.type);
 			return `  ${key}: ${value}`;
@@ -237,7 +260,8 @@ export const compile = (src, opts) => {
 		// resources
 		Term: (data) => {
 			const assignment = compileAssignment(data.id, data.type);
-			metadata[assignment].html = hasMarkup(data);
+			metadata[assignment].html = hasMarkup(data.value);
+			html = metadata[assignment].html;
 			const templateStringLiteral = compileType(data.value, data.type);
 			const attributes = compileAttributes(data, assignment);
 
@@ -262,7 +286,8 @@ export const compile = (src, opts) => {
 		},
 		Message: (data) => {
 			const assignment = compileAssignment(data.id, data.type);
-			metadata[assignment].html = hasMarkup(data);
+			metadata[assignment].html = hasMarkup(data.value);
+			html = metadata[assignment].html;
 
 			let templateStringLiteral =
 				data.value && compileType(data.value, data.type);
@@ -367,7 +392,7 @@ export const compile = (src, opts) => {
 			// string literal: bare `1,000` inside `${}` is a comma expression).
 			// Argument, selector, and variant-key positions need the raw value
 			// for Intl options and variant matching.
-			if (["Message", "Term", "Variant", "Attribute"].includes(parent)) {
+			if (patternParents.includes(parent)) {
 				return JSON.stringify(Intl.NumberFormat(options.locale).format(number));
 			}
 			return number;
@@ -379,11 +404,11 @@ export const compile = (src, opts) => {
 			const value = data.id.name.includes("-")
 				? `${options.params}?.[${JSON.stringify(data.id.name)}]`
 				: `${options.params}?.${data.id.name}`;
-			if (["Message", "Variant", "Attribute"].includes(parent)) {
+			if (patternParents.includes(parent)) {
 				const formatted = `__formatVariable(${value}, ${JSON.stringify(data.id.name)})`;
 				// An `Html` suffix is the caller's declaration that the value is
 				// already safe markup; every other variable is escaped as text.
-				if (metadata[variable].html && !data.id.name.endsWith("Html")) {
+				if (html && !data.id.name.endsWith("Html")) {
 					functions.__escapeHtml = true;
 					return `__escapeHtml(${formatted})`;
 				}
@@ -579,7 +604,7 @@ const __formatVariable = (value, name) => {
 	if (functions.__escapeHtml) {
 		output += `
 const __escapeChar = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
-const __escapeHtml = (value) => value.replace(/[&<>"']/g, (c) => __escapeChar[c])
+const __escapeHtml = (value) => String(value).replace(/[&<>"']/g, (c) => __escapeChar[c])
 `;
 	}
 	if (functions.__select) {
