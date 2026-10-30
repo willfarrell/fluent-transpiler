@@ -199,6 +199,70 @@ test("Should escape variables in a message referencing a markup message", async 
 	strictEqual(mod.default("msg", { value: "a & b" }), "<b>x</b> a &amp; b");
 });
 
+test("Should escape variables in a markup term", async () => {
+	const mod = await compileAndImport(
+		"-bold = <b>{ $name }</b>\nmsg = { -bold }\n",
+		{ locale: "en-CA" },
+	);
+	strictEqual(
+		mod.default("msg", { name: "<u>x</u>" }),
+		"<b>&lt;u&gt;x&lt;/u&gt;</b>",
+	);
+});
+
+test("Should escape a plain message embedded in a markup message", async () => {
+	const mod = await compileAndImport(
+		"greeting = Hi { $name } & co\nmsg = <b>{ greeting }</b>\n",
+		{ locale: "en-CA" },
+	);
+	strictEqual(
+		mod.default("msg", { name: "<u>x</u>" }),
+		"<b>Hi &lt;u&gt;x&lt;/u&gt; &amp; co</b>",
+	);
+	strictEqual(
+		mod.default("greeting", { name: "<u>x</u>" }),
+		"Hi <u>x</u> & co",
+	);
+});
+
+test("Should not escape a variable whose name ends in Html in a markup term", async () => {
+	const mod = await compileAndImport(
+		"-p = <p>{ $linkHtml } { $name }</p>\n-wrap = { $linkHtml }\nmsg = { -p }<div>{ -wrap }</div>\n",
+		{ locale: "en-CA" },
+	);
+	strictEqual(
+		mod.default("msg", { linkHtml: "<a>x</a>", name: "<u>" }),
+		"<p><a>x</a> &lt;u&gt;</p><div><a>x</a></div>",
+	);
+});
+
+test("Should scope escaping to the attribute that carries markup", async () => {
+	const mod = await compileAndImport(
+		"-note = Note for { $name }\nmsg =\n    .text = Hi { $name }. { -note }\n    .html = <b>Hi { $name }.</b> { -note }\n",
+		{ locale: "en-CA" },
+	);
+	deepStrictEqual(mod.default("msg", { name: "<u>" }).attributes, {
+		text: "Hi <u>. Note for <u>",
+		html: "<b>Hi &lt;u&gt;.</b> Note for &lt;u&gt;",
+	});
+});
+
+test("Should escape a plain attribute embedded in a markup message", async () => {
+	const mod = await compileAndImport(
+		"link =\n    .label = { $label }\n    .html = <i>x</i>\nmsg = <b>{ link.label }</b>{ link.html }\n",
+		{ locale: "en-CA" },
+	);
+	strictEqual(mod.default("msg", { label: "<u>" }), "<b>&lt;u&gt;</b><i>x</i>");
+});
+
+test("Should render a value-less message embedded in markup as before", async () => {
+	const mod = await compileAndImport(
+		"link =\n    .label = x\nmsg = <b>{ link }</b>\n",
+		{ locale: "en-CA" },
+	);
+	strictEqual(mod.default("msg"), "<b>null</b>");
+});
+
 test("Should leave variables verbatim in a message referencing plain text", async () => {
 	const mod = await compileAndImport(
 		"-brand = Acme\nmsg = { -brand } { $value }\n",
@@ -1954,6 +2018,15 @@ test("Should reject a message that references itself", () => {
 	});
 	throws(() => compile("-brand = { -brand }", { locale: "en-CA" }), {
 		message: /Self reference "brand"/,
+	});
+	throws(
+		() => compile("msg = { msg.attr }\n  .attr = x", { locale: "en-CA" }),
+		{
+			message: /Self reference "msg"/,
+		},
+	);
+	throws(() => compile("msg = { missing.attr }", { locale: "en-CA" }), {
+		message: /Unknown reference "missing"/,
 	});
 });
 
