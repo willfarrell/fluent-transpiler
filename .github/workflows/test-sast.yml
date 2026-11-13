@@ -319,9 +319,11 @@ jobs:
           disable-telemetry: true
           allowed-endpoints: >
             api.github.com:443
+            files.pythonhosted.org:443
             ghcr.io:443
             github.com:443
             pkg-containers.githubusercontent.com:443
+            pypi.org:443
       # allowed-endpoints: >
       #   github.com:443
       - name: Checkout repository
@@ -330,9 +332,11 @@ jobs:
           persist-credentials: false
       # allowed-endpoints: >
       #   api.github.com:443
+      #   files.pythonhosted.org:443
       #   ghcr.io:443
       #   github.com:443
       #   pkg-containers.githubusercontent.com:443
+      #   pypi.org:443
       - name: zizmor
         uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
 
@@ -371,7 +375,7 @@ jobs:
 
   # https://github.com/trufflesecurity/trufflehog
   trufflehog:
-    name: 'TruffleHog: secrets'
+    name: "TruffleHog: secrets"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     if: (github.actor != 'dependabot[bot]')
@@ -407,7 +411,7 @@ jobs:
 
   # https://github.com/gitleaks/gitleaks-action
   gitleaks:
-    name: 'gitleaks: secrets'
+    name: "gitleaks: secrets"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     if: (github.actor != 'dependabot[bot]')

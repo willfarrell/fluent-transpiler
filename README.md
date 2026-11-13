@@ -62,9 +62,9 @@ Options:
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | locale           | What locale(s) to be used. Multiple can be set to allow for fallback. i.e. `en-CA`                                                                                                                                                                           |
 | comments         | Include comments in output file. Default: `true`                                                                                                                                                                                                             |
-| includeKey       | Array of message keys to include; matches the exported name (`msgOne`) or the original FTL id (`msg-one`). Non-included messages remain private consts so references keep working. Default: `[]` (include all)                                                                                                                                                                                                |
-| excludeKey       | Array of message keys to exclude; matches the exported name (`msgOne`) or the original FTL id (`msg-one`). Excluded messages remain private consts so references keep working. Default: `[]` (exclude none)                                                                                                                                                                                               |
-| excludeValue     | Set message to an empty string when it equals this value. Default: `undefined`                                                                                                                                                                             |
+| includeKey       | Array of message keys to include; matches the exported name (`msgOne`) or the original FTL id (`msg-one`). Non-included messages remain private consts so references keep working. Default: `[]` (include all)                                               |
+| excludeKey       | Array of message keys to exclude; matches the exported name (`msgOne`) or the original FTL id (`msg-one`). Excluded messages remain private consts so references keep working. Default: `[]` (exclude none)                                                  |
+| excludeValue     | Set message to an empty string when it equals this value. Default: `undefined`                                                                                                                                                                               |
 | disableMinify    | If disabled, all exported messages will have the same interface `(params) => ({value, attributes})`. Default: each exported message could be a different type based on what is needed to generate the message (`string`, `object`, `() => ''`, `() => ({})`) |
 | errorOnJunk      | Throw error when `Junk` is parsed. Default: `true`                                                                                                                                                                                                           |
 | variableNotation | What variable notation to use with exports. Choices: `camelCase`, `pascalCase`, `snakeCase`, `constantCase`. Default: `camelCase`                                                                                                                            |
@@ -76,12 +76,12 @@ Messages and terms must be defined before they are referenced; referencing a
 later definition is a compile error.
 
 ```javascript
-import { readFile, writeFile } from 'node:fs/promises'
-import fluentTranspiler from 'fluent-transpiler'
+import { readFile, writeFile } from "node:fs/promises";
+import fluentTranspiler from "fluent-transpiler";
 
-const ftl = await readFile('./path/to/en.ftl', { encoding: 'utf8' })
-const js = fluentTranspiler(ftl, { locale: 'en-CA' })
-await writeFile('./path/to/en.mjs', js, 'utf8')
+const ftl = await readFile("./path/to/en.ftl", { encoding: "utf8" });
+const js = fluentTranspiler(ftl, { locale: "en-CA" });
+await writeFile("./path/to/en.mjs", js, "utf8");
 ```
 
 ### Attributes
@@ -99,12 +99,12 @@ tooltip = { login.title }
 
 ```javascript
 export const login = {
-  value: `Sign in`,
-  attributes: {
-    title: `Sign in to your account`
-  }
-}
-export const tooltip = `${login.attributes.title}`
+	value: `Sign in`,
+	attributes: {
+		title: `Sign in to your account`,
+	},
+};
+export const tooltip = `${login.attributes.title}`;
 ```
 
 Term attributes are emitted as well. A term that has attributes compiles to a
@@ -125,19 +125,20 @@ brand-updated = { -brand.gender ->
 
 ```javascript
 const brand = {
-  value: `Aurora`,
-  attributes: {
-    gender: `feminine`
-  }
-}
-export const brandUpdated = (params) => `${__select(
-    brand.attributes.gender,
-    {
-      __proto__: null,
-      'feminine': `${brand.value} has been updated.`
-    },
-    `The ${brand.value} app has been updated.`
-  )}`
+	value: `Aurora`,
+	attributes: {
+		gender: `feminine`,
+	},
+};
+export const brandUpdated = (params) =>
+	`${__select(
+		brand.attributes.gender,
+		{
+			__proto__: null,
+			feminine: `${brand.value} has been updated.`,
+		},
+		`The ${brand.value} app has been updated.`,
+	)}`;
 ```
 
 ### Joining multiple files
@@ -147,12 +148,11 @@ joins files from disk. Sources are concatenated in the order supplied; top-level
 message and term ids must be unique across the set.
 
 ```javascript
-import { writeFile } from 'node:fs/promises'
-import { compileFiles } from 'fluent-transpiler'
+import { writeFile } from "node:fs/promises";
+import { compileFiles } from "fluent-transpiler";
 
-const js = await compileFiles(
-  ['./common.ftl', './brand.ftl', './app.ftl'],
-  { locale: 'en-CA' },
-)
-await writeFile('./en.mjs', js, 'utf8')
+const js = await compileFiles(["./common.ftl", "./brand.ftl", "./app.ftl"], {
+	locale: "en-CA",
+});
+await writeFile("./en.mjs", js, "utf8");
 ```

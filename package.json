@@ -97,7 +97,7 @@
 		"typescript": "^5.9.3"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.5.15",
+		"@biomejs/biome": "^2.0.0",
 		"@commitlint/cli": "^21.2.3",
 		"@commitlint/config-conventional": "^21.2.3",
 		"@fluent/bundle": "^0.19.1",
