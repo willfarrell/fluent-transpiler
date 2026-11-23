@@ -89,7 +89,7 @@
 	"homepage": "https://github.com/willfarrell/fluent-transpiler",
 	"dependencies": {
 		"@fluent/syntax": "0.19.0",
-		"commander": "15.0.0"
+		"commander": "15.1.0"
 	},
 	"overrides": {
 		"js-yaml": ">=4.2.0",
